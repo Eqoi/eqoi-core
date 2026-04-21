@@ -1,0 +1,39 @@
+# ============================
+#  Eqoi Theme
+# ============================
+
+struct EqoiTheme:
+    background: UIColor = 0
+    surface: UIColor = 0
+    surface_hover: UIColor = 0
+    surface_active: UIColor = 0
+    text: UIColor = 0
+    muted_text: UIColor = 0
+    accent: UIColor = 0
+    accent_hover: UIColor = 0
+    border: UIColor = 0
+    danger: UIColor = 0
+    spacing: i32 = 12
+    padding: i32 = 14
+    border_width: i32 = 1
+
+imple EqoiTheme:
+    static fun dark() -> EqoiTheme:
+        return EqoiTheme(
+            background=ui_rgb(12, 16, 18),
+            surface=ui_rgb(24, 31, 35),
+            surface_hover=ui_rgb(34, 46, 52),
+            surface_active=ui_rgb(43, 59, 66),
+            text=ui_rgb(238, 244, 246),
+            muted_text=ui_rgb(155, 169, 175),
+            accent=ui_rgb(48, 146, 240),
+            accent_hover=ui_rgb(72, 166, 255),
+            border=ui_rgb(83, 103, 112),
+            danger=ui_rgb(245, 91, 96),
+            spacing=12,
+            padding=14,
+            border_width=1
+        )
+
+fun eqoi_theme_dark() -> EqoiTheme:
+    return EqoiTheme.dark()

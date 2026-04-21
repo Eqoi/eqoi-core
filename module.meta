@@ -1,0 +1,20 @@
+# Eqoi Module Metadata
+# High-level native app framework for Dolet.
+
+[info]
+name = eqoi
+version = 0.1.0
+description = Native application framework built on Dolet window and ui
+
+[dependencies]
+window = required
+ui = required
+
+[link.windows]
+system_libs = user32, gdi32
+
+[link.linux]
+# Planned later through ui/window Linux backends.
+
+[link.macos]
+# Planned later.

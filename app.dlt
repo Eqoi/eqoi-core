@@ -1,0 +1,335 @@
+# ============================
+#  Eqoi App
+# ============================
+
+struct EqoiApp:
+    window_handle: i64 = 0
+    window_hinstance: i64 = 0
+    window_should_close: i32 = 0
+    window_resized: i32 = 0
+    window_focused: i32 = 1
+    window_surface: i64 = 0
+    width: i32 = 0
+    height: i32 = 0
+    valid: i32 = 0
+
+    mouse_x: i32 = 0
+    mouse_y: i32 = 0
+    mouse_previous_x: i32 = 0
+    mouse_previous_y: i32 = 0
+    mouse_left_down: i32 = 0
+    mouse_right_down: i32 = 0
+    mouse_middle_down: i32 = 0
+    mouse_previous_left_down: i32 = 0
+    mouse_previous_right_down: i32 = 0
+    mouse_previous_middle_down: i32 = 0
+
+    command_kinds: i64 = 0
+    command_xs: i64 = 0
+    command_ys: i64 = 0
+    command_widths: i64 = 0
+    command_heights: i64 = 0
+    command_x2s: i64 = 0
+    command_y2s: i64 = 0
+    command_colors: i64 = 0
+    command_backgrounds: i64 = 0
+    command_thicknesses: i64 = 0
+    command_texts: i64 = 0
+    command_count: i32 = 0
+    command_capacity: i32 = 0
+
+    theme_background: UIColor = 0
+    theme_surface: UIColor = 0
+    theme_surface_hover: UIColor = 0
+    theme_surface_active: UIColor = 0
+    theme_text: UIColor = 0
+    theme_muted_text: UIColor = 0
+    theme_accent: UIColor = 0
+    theme_accent_hover: UIColor = 0
+    theme_border: UIColor = 0
+    theme_danger: UIColor = 0
+    theme_spacing: i32 = 12
+    theme_padding: i32 = 14
+    theme_border_width: i32 = 1
+
+imple EqoiApp:
+    static fun create(title: str, width: i32, height: i32) -> EqoiApp:
+        app: EqoiApp = EqoiApp()
+        app.use_dark_theme()
+
+        win: Window = Window.create(title, width, height)
+        if win.get_handle() == 0:
+            return app
+
+        commands: UIDrawList = ui_draw_list_create(256)
+        if commands.is_valid() == 0:
+            win.destroy()
+            return app
+
+        app.window_handle = win.get_handle()
+        app.window_hinstance = win.get_hinstance()
+        app.window_should_close = 0
+        app.window_resized = 0
+        app.window_focused = 1
+        app.window_surface = 0
+        app.width = width
+        app.height = height
+        app.valid = 1
+
+        app.command_kinds = commands.kinds
+        app.command_xs = commands.xs
+        app.command_ys = commands.ys
+        app.command_widths = commands.widths
+        app.command_heights = commands.heights
+        app.command_x2s = commands.x2s
+        app.command_y2s = commands.y2s
+        app.command_colors = commands.colors
+        app.command_backgrounds = commands.backgrounds
+        app.command_thicknesses = commands.thicknesses
+        app.command_texts = commands.texts
+        app.command_count = commands.count
+        app.command_capacity = commands.capacity
+        return app
+
+    fun use_dark_theme(self):
+        self.theme_background = ui_rgb(12, 16, 18)
+        self.theme_surface = ui_rgb(24, 31, 35)
+        self.theme_surface_hover = ui_rgb(34, 46, 52)
+        self.theme_surface_active = ui_rgb(43, 59, 66)
+        self.theme_text = ui_rgb(238, 244, 246)
+        self.theme_muted_text = ui_rgb(155, 169, 175)
+        self.theme_accent = ui_rgb(48, 146, 240)
+        self.theme_accent_hover = ui_rgb(72, 166, 255)
+        self.theme_border = ui_rgb(83, 103, 112)
+        self.theme_danger = ui_rgb(245, 91, 96)
+        self.theme_spacing = 12
+        self.theme_padding = 14
+        self.theme_border_width = 1
+
+    fun destroy(self):
+        commands: UIDrawList = UIDrawList(
+            kinds=self.command_kinds,
+            xs=self.command_xs,
+            ys=self.command_ys,
+            widths=self.command_widths,
+            heights=self.command_heights,
+            x2s=self.command_x2s,
+            y2s=self.command_y2s,
+            colors=self.command_colors,
+            backgrounds=self.command_backgrounds,
+            thicknesses=self.command_thicknesses,
+            texts=self.command_texts,
+            count=self.command_count,
+            capacity=self.command_capacity
+        )
+        if commands.is_valid() == 1:
+            commands.destroy()
+
+        win: Window = Window(
+            handle=self.window_handle,
+            hinstance=self.window_hinstance,
+            width=self.width,
+            height=self.height,
+            should_close_flag=self.window_should_close,
+            is_resized=self.window_resized,
+            is_focused=self.window_focused,
+            vulkan_surface=self.window_surface
+        )
+        if win.get_handle() != 0:
+            win.destroy()
+
+        self.window_handle = 0
+        self.valid = 0
+        self.width = 0
+        self.height = 0
+        self.command_kinds = 0
+        self.command_xs = 0
+        self.command_ys = 0
+        self.command_widths = 0
+        self.command_heights = 0
+        self.command_x2s = 0
+        self.command_y2s = 0
+        self.command_colors = 0
+        self.command_backgrounds = 0
+        self.command_thicknesses = 0
+        self.command_texts = 0
+        self.command_count = 0
+        self.command_capacity = 0
+
+    fun is_valid(self) -> i32:
+        return self.valid
+
+    fun should_close(self) -> i32:
+        if self.valid == 0:
+            return 1
+
+        win: Window = Window(
+            handle=self.window_handle,
+            hinstance=self.window_hinstance,
+            width=self.width,
+            height=self.height,
+            should_close_flag=self.window_should_close,
+            is_resized=self.window_resized,
+            is_focused=self.window_focused,
+            vulkan_surface=self.window_surface
+        )
+        result: i32 = win.should_close()
+        self.window_should_close = win.should_close_flag
+        return result
+
+    fun begin(self) -> i32:
+        if self.valid == 0:
+            return 0
+
+        win: Window = Window(
+            handle=self.window_handle,
+            hinstance=self.window_hinstance,
+            width=self.width,
+            height=self.height,
+            should_close_flag=self.window_should_close,
+            is_resized=self.window_resized,
+            is_focused=self.window_focused,
+            vulkan_surface=self.window_surface
+        )
+        win.wait_events()
+        self.sync_window(win)
+        self.update_mouse()
+        self.begin_frame()
+        return 1
+
+    fun begin_poll(self) -> i32:
+        if self.valid == 0:
+            return 0
+
+        win: Window = Window(
+            handle=self.window_handle,
+            hinstance=self.window_hinstance,
+            width=self.width,
+            height=self.height,
+            should_close_flag=self.window_should_close,
+            is_resized=self.window_resized,
+            is_focused=self.window_focused,
+            vulkan_surface=self.window_surface
+        )
+        win.poll_events()
+        self.sync_window(win)
+        self.update_mouse()
+        self.begin_frame()
+        return 1
+
+    fun begin_timeout(self, timeout_ms: i32) -> i32:
+        if self.valid == 0:
+            return 0
+
+        win: Window = Window(
+            handle=self.window_handle,
+            hinstance=self.window_hinstance,
+            width=self.width,
+            height=self.height,
+            should_close_flag=self.window_should_close,
+            is_resized=self.window_resized,
+            is_focused=self.window_focused,
+            vulkan_surface=self.window_surface
+        )
+        win.wait_events_timeout(timeout_ms)
+        self.sync_window(win)
+        self.update_mouse()
+        self.begin_frame()
+        return 1
+
+    fun end(self):
+        if self.valid == 0:
+            return
+
+        commands: UIDrawList = UIDrawList(
+            kinds=self.command_kinds,
+            xs=self.command_xs,
+            ys=self.command_ys,
+            widths=self.command_widths,
+            heights=self.command_heights,
+            x2s=self.command_x2s,
+            y2s=self.command_y2s,
+            colors=self.command_colors,
+            backgrounds=self.command_backgrounds,
+            thicknesses=self.command_thicknesses,
+            texts=self.command_texts,
+            count=self.command_count,
+            capacity=self.command_capacity
+        )
+        canvas: UiCanvas = ui_begin_gdi(self.window_handle, self.width, self.height)
+        if canvas.is_valid() == 1:
+            commands.render(canvas)
+            canvas.end()
+
+    fun sync_window(self, win: Window):
+        self.window_handle = win.handle
+        self.window_hinstance = win.hinstance
+        self.width = win.get_width()
+        self.height = win.get_height()
+        self.window_should_close = win.should_close_flag
+        self.window_resized = win.is_resized
+        self.window_focused = win.is_focused
+        self.window_surface = win.vulkan_surface
+
+    fun update_mouse(self):
+        mouse: UIMouseState = UIMouseState(
+            x=self.mouse_x,
+            y=self.mouse_y,
+            previous_x=self.mouse_previous_x,
+            previous_y=self.mouse_previous_y,
+            left_down=self.mouse_left_down,
+            right_down=self.mouse_right_down,
+            middle_down=self.mouse_middle_down,
+            previous_left_down=self.mouse_previous_left_down,
+            previous_right_down=self.mouse_previous_right_down,
+            previous_middle_down=self.mouse_previous_middle_down
+        )
+        mouse.update(self.window_handle)
+        self.mouse_x = mouse.x
+        self.mouse_y = mouse.y
+        self.mouse_previous_x = mouse.previous_x
+        self.mouse_previous_y = mouse.previous_y
+        self.mouse_left_down = mouse.left_down
+        self.mouse_right_down = mouse.right_down
+        self.mouse_middle_down = mouse.middle_down
+        self.mouse_previous_left_down = mouse.previous_left_down
+        self.mouse_previous_right_down = mouse.previous_right_down
+        self.mouse_previous_middle_down = mouse.previous_middle_down
+
+    fun begin_frame(self):
+        commands: UIDrawList = UIDrawList(
+            kinds=self.command_kinds,
+            xs=self.command_xs,
+            ys=self.command_ys,
+            widths=self.command_widths,
+            heights=self.command_heights,
+            x2s=self.command_x2s,
+            y2s=self.command_y2s,
+            colors=self.command_colors,
+            backgrounds=self.command_backgrounds,
+            thicknesses=self.command_thicknesses,
+            texts=self.command_texts,
+            count=self.command_count,
+            capacity=self.command_capacity
+        )
+        commands.clear()
+        commands.push_clear(self.width, self.height, self.theme_background)
+        self.command_count = commands.count
+
+    fun set_theme(self, theme: EqoiTheme):
+        self.theme_background = theme.background
+        self.theme_surface = theme.surface
+        self.theme_surface_hover = theme.surface_hover
+        self.theme_surface_active = theme.surface_active
+        self.theme_text = theme.text
+        self.theme_muted_text = theme.muted_text
+        self.theme_accent = theme.accent
+        self.theme_accent_hover = theme.accent_hover
+        self.theme_border = theme.border
+        self.theme_danger = theme.danger
+        self.theme_spacing = theme.spacing
+        self.theme_padding = theme.padding
+        self.theme_border_width = theme.border_width
+
+fun eqoi_app_create(title: str, width: i32, height: i32) -> EqoiApp:
+    return EqoiApp.create(title, width, height)

@@ -1,0 +1,213 @@
+# ============================
+#  Eqoi Widgets
+# ============================
+
+imple EqoiApp:
+    fun push_commands(self, commands: UIDrawList):
+        self.command_count = commands.count
+
+    fun text(self, x: i32, y: i32, value: str, color: UIColor):
+        commands: UIDrawList = UIDrawList(
+            kinds=self.command_kinds,
+            xs=self.command_xs,
+            ys=self.command_ys,
+            widths=self.command_widths,
+            heights=self.command_heights,
+            x2s=self.command_x2s,
+            y2s=self.command_y2s,
+            colors=self.command_colors,
+            backgrounds=self.command_backgrounds,
+            thicknesses=self.command_thicknesses,
+            texts=self.command_texts,
+            count=self.command_count,
+            capacity=self.command_capacity
+        )
+        commands.push_text(x, y, value, color)
+        self.command_count = commands.count
+
+    fun label(self, x: i32, y: i32, value: str):
+        self.text(x, y, value, self.theme_text)
+
+    fun muted_label(self, x: i32, y: i32, value: str):
+        self.text(x, y, value, self.theme_muted_text)
+
+    fun title(self, x: i32, y: i32, value: str):
+        commands: UIDrawList = UIDrawList(
+            kinds=self.command_kinds,
+            xs=self.command_xs,
+            ys=self.command_ys,
+            widths=self.command_widths,
+            heights=self.command_heights,
+            x2s=self.command_x2s,
+            y2s=self.command_y2s,
+            colors=self.command_colors,
+            backgrounds=self.command_backgrounds,
+            thicknesses=self.command_thicknesses,
+            texts=self.command_texts,
+            count=self.command_count,
+            capacity=self.command_capacity
+        )
+        commands.push_text(x, y, value, self.theme_text)
+        commands.push_line(x, y + 24, x + 260, y + 24, self.theme_accent, 2)
+        self.command_count = commands.count
+
+    fun panel(self, x: i32, y: i32, width: i32, height: i32):
+        commands: UIDrawList = UIDrawList(
+            kinds=self.command_kinds,
+            xs=self.command_xs,
+            ys=self.command_ys,
+            widths=self.command_widths,
+            heights=self.command_heights,
+            x2s=self.command_x2s,
+            y2s=self.command_y2s,
+            colors=self.command_colors,
+            backgrounds=self.command_backgrounds,
+            thicknesses=self.command_thicknesses,
+            texts=self.command_texts,
+            count=self.command_count,
+            capacity=self.command_capacity
+        )
+        commands.push_fill_rect(x, y, width, height, self.theme_surface)
+        commands.push_outline_rect(x, y, width, height, self.theme_border, self.theme_border_width)
+        self.command_count = commands.count
+
+    fun rect(self, x: i32, y: i32, width: i32, height: i32, color: UIColor):
+        commands: UIDrawList = UIDrawList(
+            kinds=self.command_kinds,
+            xs=self.command_xs,
+            ys=self.command_ys,
+            widths=self.command_widths,
+            heights=self.command_heights,
+            x2s=self.command_x2s,
+            y2s=self.command_y2s,
+            colors=self.command_colors,
+            backgrounds=self.command_backgrounds,
+            thicknesses=self.command_thicknesses,
+            texts=self.command_texts,
+            count=self.command_count,
+            capacity=self.command_capacity
+        )
+        commands.push_fill_rect(x, y, width, height, color)
+        self.command_count = commands.count
+
+    fun outline(self, x: i32, y: i32, width: i32, height: i32, color: UIColor):
+        commands: UIDrawList = UIDrawList(
+            kinds=self.command_kinds,
+            xs=self.command_xs,
+            ys=self.command_ys,
+            widths=self.command_widths,
+            heights=self.command_heights,
+            x2s=self.command_x2s,
+            y2s=self.command_y2s,
+            colors=self.command_colors,
+            backgrounds=self.command_backgrounds,
+            thicknesses=self.command_thicknesses,
+            texts=self.command_texts,
+            count=self.command_count,
+            capacity=self.command_capacity
+        )
+        commands.push_outline_rect(x, y, width, height, color, self.theme_border_width)
+        self.command_count = commands.count
+
+    fun separator(self, x: i32, y: i32, width: i32):
+        commands: UIDrawList = UIDrawList(
+            kinds=self.command_kinds,
+            xs=self.command_xs,
+            ys=self.command_ys,
+            widths=self.command_widths,
+            heights=self.command_heights,
+            x2s=self.command_x2s,
+            y2s=self.command_y2s,
+            colors=self.command_colors,
+            backgrounds=self.command_backgrounds,
+            thicknesses=self.command_thicknesses,
+            texts=self.command_texts,
+            count=self.command_count,
+            capacity=self.command_capacity
+        )
+        commands.push_line(x, y, x + width, y, self.theme_border, 1)
+        self.command_count = commands.count
+
+    fun button(self, x: i32, y: i32, width: i32, height: i32, label: str) -> i32:
+        mouse: UIMouseState = UIMouseState(
+            x=self.mouse_x,
+            y=self.mouse_y,
+            previous_x=self.mouse_previous_x,
+            previous_y=self.mouse_previous_y,
+            left_down=self.mouse_left_down,
+            right_down=self.mouse_right_down,
+            middle_down=self.mouse_middle_down,
+            previous_left_down=self.mouse_previous_left_down,
+            previous_right_down=self.mouse_previous_right_down,
+            previous_middle_down=self.mouse_previous_middle_down
+        )
+        hovered: i32 = mouse.is_over_xy(x, y, width, height)
+        fill: UIColor = self.theme_accent
+        if hovered == 1:
+            fill = self.theme_accent_hover
+
+        commands: UIDrawList = UIDrawList(
+            kinds=self.command_kinds,
+            xs=self.command_xs,
+            ys=self.command_ys,
+            widths=self.command_widths,
+            heights=self.command_heights,
+            x2s=self.command_x2s,
+            y2s=self.command_y2s,
+            colors=self.command_colors,
+            backgrounds=self.command_backgrounds,
+            thicknesses=self.command_thicknesses,
+            texts=self.command_texts,
+            count=self.command_count,
+            capacity=self.command_capacity
+        )
+        commands.push_fill_rect(x, y, width, height, fill)
+        commands.push_outline_rect(x, y, width, height, self.theme_border, self.theme_border_width)
+        commands.push_text(x + self.theme_padding, y + ((height - 16) / 2), label, self.theme_text)
+        self.command_count = commands.count
+
+        if hovered == 1 and mouse.left_pressed() == 1:
+            return 1
+        return 0
+
+    fun secondary_button(self, x: i32, y: i32, width: i32, height: i32, label: str) -> i32:
+        mouse: UIMouseState = UIMouseState(
+            x=self.mouse_x,
+            y=self.mouse_y,
+            previous_x=self.mouse_previous_x,
+            previous_y=self.mouse_previous_y,
+            left_down=self.mouse_left_down,
+            right_down=self.mouse_right_down,
+            middle_down=self.mouse_middle_down,
+            previous_left_down=self.mouse_previous_left_down,
+            previous_right_down=self.mouse_previous_right_down,
+            previous_middle_down=self.mouse_previous_middle_down
+        )
+        hovered: i32 = mouse.is_over_xy(x, y, width, height)
+        fill: UIColor = self.theme_surface
+        if hovered == 1:
+            fill = self.theme_surface_hover
+
+        commands: UIDrawList = UIDrawList(
+            kinds=self.command_kinds,
+            xs=self.command_xs,
+            ys=self.command_ys,
+            widths=self.command_widths,
+            heights=self.command_heights,
+            x2s=self.command_x2s,
+            y2s=self.command_y2s,
+            colors=self.command_colors,
+            backgrounds=self.command_backgrounds,
+            thicknesses=self.command_thicknesses,
+            texts=self.command_texts,
+            count=self.command_count,
+            capacity=self.command_capacity
+        )
+        commands.push_fill_rect(x, y, width, height, fill)
+        commands.push_outline_rect(x, y, width, height, self.theme_border, self.theme_border_width)
+        commands.push_text(x + self.theme_padding, y + ((height - 16) / 2), label, self.theme_text)
+        self.command_count = commands.count
+
+        if hovered == 1 and mouse.left_pressed() == 1:
+            return 1
+        return 0

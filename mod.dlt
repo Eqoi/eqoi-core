@@ -1,0 +1,18 @@
+# ============================
+#  Eqoi Application Framework
+# ============================
+# High-level native app framework built on top of window + ui.
+module eqoi
+import window
+import ui
+
+type UIColor = i32
+
+load eqoi/theme
+load eqoi/app
+load eqoi/widgets
+
+export EqoiTheme
+export EqoiApp
+export eqoi_theme_dark
+export eqoi_app_create
