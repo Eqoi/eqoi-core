@@ -71,6 +71,15 @@ struct EqoiApp:
     text_edit_len: i32 = 0
     text_edit_caret: i32 = 0
 
+    # ---- Managed widget state ----
+    # Users call app.alloc_bool / alloc_int / alloc_buf and get an
+    # opaque i64 handle. Eqoi remembers every handle in this buffer
+    # so destroy() can free them automatically — no manual
+    # Memory.malloc / Memory.free pairs in user code.
+    state_ptrs: i64 = 0        # malloc'd array of up to 256 i64 addresses
+    state_count: i32 = 0
+    state_capacity: i32 = 256
+
 imple EqoiApp:
     static fun create(title: str, width: i32, height: i32) -> EqoiApp:
         app: EqoiApp = EqoiApp()
@@ -127,6 +136,9 @@ imple EqoiApp:
         self.theme_border_radius = 0
 
     fun destroy(self):
+        # Free any user-managed state slots first
+        self._free_state()
+
         commands: UIDrawList = UIDrawList(
             kinds=self.command_kinds,
             xs=self.command_xs,
@@ -421,6 +433,74 @@ imple EqoiApp:
         self.theme_spacing = theme.spacing
         self.theme_padding = theme.padding
         self.theme_border_width = theme.border_width
+
+    # ================================================================
+    #  Managed state — hides Memory.malloc / Memory.free from user code
+    # ================================================================
+
+    # Internal: lazy-init the state_ptrs array and record a new allocation.
+    # Returns the same ptr for chaining.
+    fun _track(self, ptr: i64) -> i64:
+        if self.state_ptrs == 0:
+            self.state_ptrs = Memory.malloc_zeroed((self.state_capacity as i64) * 8)
+        if self.state_count < self.state_capacity:
+            Memory.write_i64(self.state_ptrs + (self.state_count as i64) * 8, ptr)
+            self.state_count = self.state_count + 1
+        return ptr
+
+    # Allocate a managed 32-bit boolean slot (0 or 1). Freed automatically
+    # on app.destroy(). Usage:
+    #   dark: i64 = app.alloc_bool(0)
+    #   ...
+    #   if app.checkbox(x, y, "Dark", dark) == 1: ...
+    #   if app.get_bool(dark) == 1: ...
+    fun alloc_bool(self, initial: i32) -> i64:
+        ptr: i64 = Memory.malloc_zeroed(4)
+        Memory.write_i32(ptr, initial)
+        return self._track(ptr)
+
+    # Allocate a managed 32-bit integer slot.
+    fun alloc_int(self, initial: i32) -> i64:
+        ptr: i64 = Memory.malloc_zeroed(4)
+        Memory.write_i32(ptr, initial)
+        return self._track(ptr)
+
+    # Allocate a managed zero-initialised byte buffer (for text_input).
+    # `capacity` is the number of storable characters; one extra byte
+    # is reserved for the trailing NUL terminator.
+    fun alloc_buf(self, capacity: i32) -> i64:
+        ptr: i64 = Memory.malloc_zeroed((capacity as i64) + 1)
+        return self._track(ptr)
+
+    # Readers/writers — thin wrappers over Memory.* so user code reads
+    # naturally without pulling in the Memory module explicitly.
+    fun get_bool(self, ptr: i64) -> i32:
+        return Memory.read_i32(ptr)
+
+    fun get_int(self, ptr: i64) -> i32:
+        return Memory.read_i32(ptr)
+
+    fun set_bool(self, ptr: i64, value: i32):
+        Memory.write_i32(ptr, value)
+
+    fun set_int(self, ptr: i64, value: i32):
+        Memory.write_i32(ptr, value)
+
+    # Free every tracked allocation. Called from destroy() — users
+    # shouldn't need to invoke this directly.
+    fun _free_state(self):
+        if self.state_ptrs == 0:
+            return
+        i: i32 = 0
+        p: i64 = 0
+        while i < self.state_count:
+            p = Memory.read_i64(self.state_ptrs + (i as i64) * 8)
+            if p != 0:
+                Memory.free(p)
+            i = i + 1
+        Memory.free(self.state_ptrs)
+        self.state_ptrs = 0
+        self.state_count = 0
 
 fun eqoi_app_create(title: str, width: i32, height: i32) -> EqoiApp:
     return EqoiApp.create(title, width, height)
