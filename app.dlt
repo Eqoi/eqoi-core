@@ -51,7 +51,7 @@ struct EqoiApp:
     theme_spacing: i32 = 12
     theme_padding: i32 = 14
     theme_border_width: i32 = 1
-    theme_border_radius: i32 = 6
+    theme_border_radius: i32 = 0
 
     # ---- Widget state (IMGUI-style identity tracking) ----
     # Widget IDs are hashes of widget position + type tag, computed at
@@ -124,7 +124,7 @@ imple EqoiApp:
         self.theme_spacing = 12
         self.theme_padding = 14
         self.theme_border_width = 1
-        self.theme_border_radius = 6
+        self.theme_border_radius = 0
 
     fun destroy(self):
         commands: UIDrawList = UIDrawList(
