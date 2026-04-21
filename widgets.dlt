@@ -161,9 +161,14 @@ imple EqoiApp:
             count=self.command_count,
             capacity=self.command_capacity
         )
-        commands.push_fill_rect(x, y, width, height, fill)
-        commands.push_outline_rect(x, y, width, height, self.theme_border, self.theme_border_width)
-        commands.push_text(x + self.theme_padding, y + ((height - 16) / 2), label, self.theme_text)
+        r: i32 = self.theme_border_radius
+        if r > 0:
+            commands.push_fill_rounded_rect(x, y, width, height, r, fill)
+        else:
+            commands.push_fill_rect(x, y, width, height, fill)
+        # Centre the label horizontally (monospace font, 8px per char)
+        label_w: i32 = (Memory.strlen(label) as i32) * 8
+        commands.push_text(x + (width - label_w) / 2, y + (height - 8) / 2, label, self.theme_text)
         self.command_count = commands.count
 
         # Track hover for tooltip support.
@@ -208,9 +213,15 @@ imple EqoiApp:
             count=self.command_count,
             capacity=self.command_capacity
         )
-        commands.push_fill_rect(x, y, width, height, fill)
-        commands.push_outline_rect(x, y, width, height, self.theme_border, self.theme_border_width)
-        commands.push_text(x + self.theme_padding, y + ((height - 16) / 2), label, self.theme_text)
+        r: i32 = self.theme_border_radius
+        if r > 0:
+            commands.push_fill_rounded_rect(x, y, width, height, r, fill)
+            commands.push_outline_rounded_rect(x, y, width, height, r, self.theme_border, self.theme_border_width)
+        else:
+            commands.push_fill_rect(x, y, width, height, fill)
+            commands.push_outline_rect(x, y, width, height, self.theme_border, self.theme_border_width)
+        label_w: i32 = (Memory.strlen(label) as i32) * 8
+        commands.push_text(x + (width - label_w) / 2, y + (height - 8) / 2, label, self.theme_text)
         self.command_count = commands.count
 
         # Track hover for tooltip support.
@@ -259,12 +270,11 @@ imple EqoiApp:
         )
 
     # ---------------------------------------------------------------
-    # Checkbox — 18x18 box + tick + right-hand label.
-    # value_ptr addresses an i32 (0 or 1) owned by the caller.
-    # Returns 1 on the frame the value changed, else 0.
+    # Checkbox — 16x16 plain square box with a white tick when checked.
+    # Matches the look you get out-of-the-box on web forms / native apps.
     # ---------------------------------------------------------------
     fun checkbox(self, x: i32, y: i32, label: str, value_ptr: i64) -> i32:
-        box: i32 = 18
+        box: i32 = 16
         id: i64 = self.widget_id(100, x, y)
         mouse: UIMouseState = self._mouse_snap()
         hovered: i32 = mouse.is_over_xy(x, y, box, box)
@@ -274,25 +284,27 @@ imple EqoiApp:
         current: i32 = Memory.read_i32(value_ptr)
 
         commands: UIDrawList = self._commands()
-        r: i32 = self.theme_border_radius
-        if r > 4:
-            r = 4
+        # Box fill: accent when checked, else surface
         fill: UIColor = self.theme_surface
-        if hovered == 1:
-            fill = self.theme_surface_hover
-        if r > 0:
-            commands.push_fill_rounded_rect(x, y, box, box, r, fill)
-            commands.push_outline_rounded_rect(x, y, box, box, r, self.theme_border, self.theme_border_width)
-        else:
-            commands.push_fill_rect(x, y, box, box, fill)
-            commands.push_outline_rect(x, y, box, box, self.theme_border, self.theme_border_width)
-
-        # Tick — simple inset square when checked
+        border: UIColor = self.theme_border
         if current == 1:
-            commands.push_fill_rect(x + 4, y + 4, box - 8, box - 8, self.theme_accent)
+            fill = self.theme_accent
+            border = self.theme_accent
+            if hovered == 1:
+                fill = self.theme_accent_hover
+                border = self.theme_accent_hover
+        elif hovered == 1:
+            border = self.theme_text
+        commands.push_fill_rect(x, y, box, box, fill)
+        commands.push_outline_rect(x, y, box, box, border, self.theme_border_width)
 
-        # Label
-        commands.push_text(x + box + 8, y + ((box - 8) / 2), label, self.theme_text)
+        # Checkmark: two lines forming ✓ — only when checked
+        if current == 1:
+            commands.push_line(x + 3, y + 8, x + 7, y + 12, self.theme_text, 2)
+            commands.push_line(x + 7, y + 12, x + 13, y + 4, self.theme_text, 2)
+
+        # Label to the right
+        commands.push_text(x + box + 8, y + (box - 8) / 2, label, self.theme_text)
         self.command_count = commands.count
 
         if hovered == 1 and mouse.left_pressed() == 1:
@@ -304,10 +316,10 @@ imple EqoiApp:
         return 0
 
     # ---------------------------------------------------------------
-    # Toggle — horizontal pill with a sliding knob (on = accent).
+    # Toggle — 40x20 pill with a sliding white knob (iOS/Android style).
     # ---------------------------------------------------------------
     fun toggle(self, x: i32, y: i32, label: str, value_ptr: i64) -> i32:
-        w: i32 = 36
+        w: i32 = 40
         h: i32 = 20
         id: i64 = self.widget_id(101, x, y)
         mouse: UIMouseState = self._mouse_snap()
@@ -327,13 +339,15 @@ imple EqoiApp:
 
         commands: UIDrawList = self._commands()
         commands.push_fill_rounded_rect(x, y, w, h, h / 2, track_color)
-        # Knob
-        knob_x: i32 = x + 2
+        # Knob: white circle that slides between left and right ends
+        knob_r: i32 = (h / 2) - 3
+        cy: i32 = y + h / 2
+        cx: i32 = x + h / 2
         if current == 1:
-            knob_x = x + w - h + 2
-        commands.push_fill_circle(knob_x + (h / 2) - 2, y + (h / 2), (h / 2) - 3, self.theme_text)
-        # Label
-        commands.push_text(x + w + 8, y + ((h - 8) / 2), label, self.theme_text)
+            cx = x + w - h / 2
+        commands.push_fill_circle(cx, cy, knob_r, self.theme_text)
+        # Label to the right
+        commands.push_text(x + w + 8, y + (h - 8) / 2, label, self.theme_text)
         self.command_count = commands.count
 
         if hovered == 1 and mouse.left_pressed() == 1:
@@ -397,19 +411,18 @@ imple EqoiApp:
             fill_w = ((v - min_v) * width) / (max_v - min_v)
         if fill_w > 0:
             commands.push_fill_rounded_rect(x, track_y, fill_w, track_h, track_h / 2, self.theme_accent)
-        # Knob
+        # Knob — single solid circle, no extra outline ring
         knob_x: i32 = x + fill_w
         knob_r: i32 = h / 2 - 2
-        knob_color: UIColor = self.theme_text
+        knob_color: UIColor = self.theme_accent
         if hovered == 1 or self.drag_id == id:
             knob_color = self.theme_accent_hover
         commands.push_fill_circle(knob_x, y + h / 2, knob_r, knob_color)
-        commands.push_outline_circle(knob_x, y + h / 2, knob_r, self.theme_border, 1)
         self.command_count = commands.count
         return changed
 
     # ---------------------------------------------------------------
-    # Progress bar — 0..100 percent, rounded corners, accent fill.
+    # Progress bar — 0..100 percent, flat bar with accent fill.
     # ---------------------------------------------------------------
     fun progress_bar(self, x: i32, y: i32, width: i32, height: i32, percent: i32):
         p: i32 = percent
@@ -418,14 +431,11 @@ imple EqoiApp:
         if p > 100:
             p = 100
         commands: UIDrawList = self._commands()
-        r: i32 = height / 2
-        if r > self.theme_border_radius:
-            r = self.theme_border_radius
-        commands.push_fill_rounded_rect(x, y, width, height, r, self.theme_surface)
+        commands.push_fill_rect(x, y, width, height, self.theme_surface)
         fill_w: i32 = (width * p) / 100
         if fill_w > 0:
-            commands.push_fill_rounded_rect(x, y, fill_w, height, r, self.theme_accent)
-        commands.push_outline_rounded_rect(x, y, width, height, r, self.theme_border, self.theme_border_width)
+            commands.push_fill_rect(x, y, fill_w, height, self.theme_accent)
+        commands.push_outline_rect(x, y, width, height, self.theme_border, self.theme_border_width)
         self.command_count = commands.count
 
     # ---------------------------------------------------------------
