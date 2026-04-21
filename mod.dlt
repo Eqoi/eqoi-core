@@ -1,9 +1,9 @@
 # ============================
 #  Eqoi Application Framework
 # ============================
-# High-level native app framework built on top of window + ui.
+# High-level native app framework built on top of draw + ui.
 module eqoi
-import window
+import draw
 import ui
 
 type UIColor = i32

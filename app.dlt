@@ -256,7 +256,7 @@ imple EqoiApp:
             count=self.command_count,
             capacity=self.command_capacity
         )
-        canvas: UiCanvas = ui_begin_gdi(self.window_handle, self.width, self.height)
+        canvas: DrawCanvas = draw_begin(self.window_handle, self.width, self.height)
         if canvas.is_valid() == 1:
             commands.render(canvas)
             canvas.end()
