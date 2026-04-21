@@ -336,13 +336,26 @@ imple EqoiApp:
         self.mouse_previous_left_down = mouse.previous_left_down
         self.mouse_previous_right_down = mouse.previous_right_down
         self.mouse_previous_middle_down = mouse.previous_middle_down
-        # Also drive the input package's state so slider/scrollbar/drag-drop
-        # widgets can read mouse_is_dragging / mouse_drag_delta_* / mouse_scroll.
-        # UIMouseState uses screen coords via GetCursorPos+ScreenToClient,
-        # while input uses raw GetCursorPos (screen coords). That's fine for
-        # drag detection — only deltas matter — and the wheel accumulator is
-        # already fed from WndProc regardless.
+        # Drive the input package each frame so slider/scrollbar/drag-drop
+        # widgets see up-to-date mouse_is_dragging / mouse_drag_delta_*.
         update_mouse()
+
+        # Bridge window-owned events into input's accumulators.
+        # window and input are independent packages; eqoi is the place
+        # that wires them together (the same way a user app would).
+        wheel: f32 = window_consume_wheel_delta()
+        if wheel != 0.0:
+            add_scroll(wheel)
+        chars: str = window_consume_typed_chars()
+        cn: i32 = Memory.strlen(chars) as i32
+        ci: i32 = 0
+        cc: i8 = 0 as i8
+        while ci < cn:
+            cc = Memory.read_i8((chars as i64) + (ci as i64))
+            input_push_typed_char(cc as i32)
+            ci = ci + 1
+        if window_consume_backspace() == 1:
+            input_push_typed_char(8)
 
     fun begin_frame(self):
         commands: UIDrawList = UIDrawList(
