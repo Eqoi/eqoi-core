@@ -209,6 +209,15 @@ imple EqoiApp:
         self.window_should_close = win.should_close_flag
         return result
 
+    # Convenience inverse of should_close — reads as a natural game loop:
+    #   while app.running():
+    #       ...
+    # Returns 1 while the window is alive, 0 once it's been closed.
+    fun running(self) -> i32:
+        if self.should_close() == 1:
+            return 0
+        return 1
+
     fun begin(self) -> i32:
         if self.valid == 0:
             return 0
