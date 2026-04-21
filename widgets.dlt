@@ -166,6 +166,11 @@ imple EqoiApp:
         commands.push_text(x + self.theme_padding, y + ((height - 16) / 2), label, self.theme_text)
         self.command_count = commands.count
 
+        # Track hover for tooltip support.
+        id: i64 = self.widget_id(110, x, y)
+        if hovered == 1:
+            self.set_hover(id)
+
         if hovered == 1 and mouse.left_pressed() == 1:
             return 1
         return 0
@@ -208,6 +213,318 @@ imple EqoiApp:
         commands.push_text(x + self.theme_padding, y + ((height - 16) / 2), label, self.theme_text)
         self.command_count = commands.count
 
+        # Track hover for tooltip support.
+        id: i64 = self.widget_id(111, x, y)
+        if hovered == 1:
+            self.set_hover(id)
+
         if hovered == 1 and mouse.left_pressed() == 1:
             return 1
         return 0
+
+    # ======================================================================
+    #  Phase-2 widgets
+    # ======================================================================
+
+    # Helper: build a UIMouseState from the app's own mouse snapshot.
+    fun _mouse_snap(self) -> UIMouseState:
+        return UIMouseState(
+            x=self.mouse_x,
+            y=self.mouse_y,
+            previous_x=self.mouse_previous_x,
+            previous_y=self.mouse_previous_y,
+            left_down=self.mouse_left_down,
+            right_down=self.mouse_right_down,
+            middle_down=self.mouse_middle_down,
+            previous_left_down=self.mouse_previous_left_down,
+            previous_right_down=self.mouse_previous_right_down,
+            previous_middle_down=self.mouse_previous_middle_down
+        )
+
+    fun _commands(self) -> UIDrawList:
+        return UIDrawList(
+            kinds=self.command_kinds,
+            xs=self.command_xs,
+            ys=self.command_ys,
+            widths=self.command_widths,
+            heights=self.command_heights,
+            x2s=self.command_x2s,
+            y2s=self.command_y2s,
+            colors=self.command_colors,
+            backgrounds=self.command_backgrounds,
+            thicknesses=self.command_thicknesses,
+            texts=self.command_texts,
+            count=self.command_count,
+            capacity=self.command_capacity
+        )
+
+    # ---------------------------------------------------------------
+    # Checkbox — 18x18 box + tick + right-hand label.
+    # value_ptr addresses an i32 (0 or 1) owned by the caller.
+    # Returns 1 on the frame the value changed, else 0.
+    # ---------------------------------------------------------------
+    fun checkbox(self, x: i32, y: i32, label: str, value_ptr: i64) -> i32:
+        box: i32 = 18
+        id: i64 = self.widget_id(100, x, y)
+        mouse: UIMouseState = self._mouse_snap()
+        hovered: i32 = mouse.is_over_xy(x, y, box, box)
+        if hovered == 1:
+            self.set_hover(id)
+
+        current: i32 = Memory.read_i32(value_ptr)
+
+        commands: UIDrawList = self._commands()
+        r: i32 = self.theme_border_radius
+        if r > 4:
+            r = 4
+        fill: UIColor = self.theme_surface
+        if hovered == 1:
+            fill = self.theme_surface_hover
+        if r > 0:
+            commands.push_fill_rounded_rect(x, y, box, box, r, fill)
+            commands.push_outline_rounded_rect(x, y, box, box, r, self.theme_border, self.theme_border_width)
+        else:
+            commands.push_fill_rect(x, y, box, box, fill)
+            commands.push_outline_rect(x, y, box, box, self.theme_border, self.theme_border_width)
+
+        # Tick — simple inset square when checked
+        if current == 1:
+            commands.push_fill_rect(x + 4, y + 4, box - 8, box - 8, self.theme_accent)
+
+        # Label
+        commands.push_text(x + box + 8, y + ((box - 8) / 2), label, self.theme_text)
+        self.command_count = commands.count
+
+        if hovered == 1 and mouse.left_pressed() == 1:
+            if current == 0:
+                Memory.write_i32(value_ptr, 1)
+            else:
+                Memory.write_i32(value_ptr, 0)
+            return 1
+        return 0
+
+    # ---------------------------------------------------------------
+    # Toggle — horizontal pill with a sliding knob (on = accent).
+    # ---------------------------------------------------------------
+    fun toggle(self, x: i32, y: i32, label: str, value_ptr: i64) -> i32:
+        w: i32 = 36
+        h: i32 = 20
+        id: i64 = self.widget_id(101, x, y)
+        mouse: UIMouseState = self._mouse_snap()
+        hovered: i32 = mouse.is_over_xy(x, y, w, h)
+        if hovered == 1:
+            self.set_hover(id)
+
+        current: i32 = Memory.read_i32(value_ptr)
+
+        track_color: UIColor = self.theme_surface
+        if current == 1:
+            track_color = self.theme_accent
+            if hovered == 1:
+                track_color = self.theme_accent_hover
+        elif hovered == 1:
+            track_color = self.theme_surface_hover
+
+        commands: UIDrawList = self._commands()
+        commands.push_fill_rounded_rect(x, y, w, h, h / 2, track_color)
+        # Knob
+        knob_x: i32 = x + 2
+        if current == 1:
+            knob_x = x + w - h + 2
+        commands.push_fill_circle(knob_x + (h / 2) - 2, y + (h / 2), (h / 2) - 3, self.theme_text)
+        # Label
+        commands.push_text(x + w + 8, y + ((h - 8) / 2), label, self.theme_text)
+        self.command_count = commands.count
+
+        if hovered == 1 and mouse.left_pressed() == 1:
+            if current == 0:
+                Memory.write_i32(value_ptr, 1)
+            else:
+                Memory.write_i32(value_ptr, 0)
+            return 1
+        return 0
+
+    # ---------------------------------------------------------------
+    # Slider (horizontal) — returns 1 if value changed this frame.
+    # Uses drag state from the input package so smooth dragging works
+    # even when the cursor leaves the track briefly.
+    # ---------------------------------------------------------------
+    fun slider(self, x: i32, y: i32, width: i32, min_v: i32, max_v: i32, value_ptr: i64) -> i32:
+        h: i32 = 20
+        id: i64 = self.widget_id(102, x, y)
+        mouse: UIMouseState = self._mouse_snap()
+        hovered: i32 = mouse.is_over_xy(x, y, width, h)
+        if hovered == 1:
+            self.set_hover(id)
+
+        v: i32 = Memory.read_i32(value_ptr)
+        if v < min_v:
+            v = min_v
+        if v > max_v:
+            v = max_v
+
+        # If user pressed on the track, grab drag ownership
+        if hovered == 1 and mouse.left_pressed() == 1:
+            self.drag_id = id
+
+        changed: i32 = 0
+        # While we own the drag, recompute value from current mouse x
+        if self.drag_id == id and mouse_is_dragging(MOUSE_LEFT) == 1:
+            rel: i32 = self.mouse_x - x
+            if rel < 0:
+                rel = 0
+            if rel > width:
+                rel = width
+            new_v: i32 = min_v
+            if max_v > min_v:
+                new_v = min_v + (rel * (max_v - min_v)) / width
+            if new_v != v:
+                Memory.write_i32(value_ptr, new_v)
+                v = new_v
+                changed = 1
+        if self.drag_id == id and mouse_is_dragging(MOUSE_LEFT) == 0:
+            self.drag_id = 0
+
+        # --- Render ---
+        commands: UIDrawList = self._commands()
+        track_h: i32 = 6
+        track_y: i32 = y + (h - track_h) / 2
+        # Track background
+        commands.push_fill_rounded_rect(x, track_y, width, track_h, track_h / 2, self.theme_surface)
+        # Active portion
+        fill_w: i32 = 0
+        if max_v > min_v:
+            fill_w = ((v - min_v) * width) / (max_v - min_v)
+        if fill_w > 0:
+            commands.push_fill_rounded_rect(x, track_y, fill_w, track_h, track_h / 2, self.theme_accent)
+        # Knob
+        knob_x: i32 = x + fill_w
+        knob_r: i32 = h / 2 - 2
+        knob_color: UIColor = self.theme_text
+        if hovered == 1 or self.drag_id == id:
+            knob_color = self.theme_accent_hover
+        commands.push_fill_circle(knob_x, y + h / 2, knob_r, knob_color)
+        commands.push_outline_circle(knob_x, y + h / 2, knob_r, self.theme_border, 1)
+        self.command_count = commands.count
+        return changed
+
+    # ---------------------------------------------------------------
+    # Progress bar — 0..100 percent, rounded corners, accent fill.
+    # ---------------------------------------------------------------
+    fun progress_bar(self, x: i32, y: i32, width: i32, height: i32, percent: i32):
+        p: i32 = percent
+        if p < 0:
+            p = 0
+        if p > 100:
+            p = 100
+        commands: UIDrawList = self._commands()
+        r: i32 = height / 2
+        if r > self.theme_border_radius:
+            r = self.theme_border_radius
+        commands.push_fill_rounded_rect(x, y, width, height, r, self.theme_surface)
+        fill_w: i32 = (width * p) / 100
+        if fill_w > 0:
+            commands.push_fill_rounded_rect(x, y, fill_w, height, r, self.theme_accent)
+        commands.push_outline_rounded_rect(x, y, width, height, r, self.theme_border, self.theme_border_width)
+        self.command_count = commands.count
+
+    # ---------------------------------------------------------------
+    # Tooltip — shows text near the cursor after the hovered widget has
+    # been hovered for at least ~30 frames (≈500 ms at 60 fps).
+    # Call at end of frame after all widgets have laid out.
+    # ---------------------------------------------------------------
+    fun tooltip(self, widget_id_hash: i64, text: str):
+        if self.hover_id != widget_id_hash:
+            return
+        if self.hover_frames < 30:
+            return
+        tx: i32 = self.mouse_x + 12
+        ty: i32 = self.mouse_y + 12
+        w: i32 = (Memory.strlen(text) as i32) * 8 + 16
+        h: i32 = 22
+        commands: UIDrawList = self._commands()
+        commands.push_fill_rounded_rect(tx, ty, w, h, 4, self.theme_surface_active)
+        commands.push_outline_rounded_rect(tx, ty, w, h, 4, self.theme_border, 1)
+        commands.push_text(tx + 8, ty + 7, text, self.theme_text)
+        self.command_count = commands.count
+
+    # ---------------------------------------------------------------
+    # Text input — single-line editable field.
+    # caller provides a byte buffer and its max length (excluding the
+    # trailing NUL). The widget drains input_typed_chars() into the
+    # buffer while focused, and handles backspace. Returns 1 if the
+    # buffer was modified this frame.
+    # ---------------------------------------------------------------
+    fun text_input(self, x: i32, y: i32, width: i32, height: i32, buf: i64, max_len: i32) -> i32:
+        id: i64 = self.widget_id(104, x, y)
+        mouse: UIMouseState = self._mouse_snap()
+        hovered: i32 = mouse.is_over_xy(x, y, width, height)
+        if hovered == 1:
+            self.set_hover(id)
+
+        # Click to focus; click elsewhere to unfocus.
+        if mouse.left_pressed() == 1:
+            if hovered == 1:
+                self.focus_id = id
+            elif self.focus_id == id:
+                self.focus_id = 0
+
+        focused: i32 = 0
+        if self.focus_id == id:
+            focused = 1
+
+        # Determine current buffer length (scan until NUL or max_len)
+        current_len: i32 = 0
+        while current_len < max_len:
+            b: i8 = Memory.read_i8(buf + (current_len as i64))
+            if b == 0:
+                break
+            current_len = current_len + 1
+
+        changed: i32 = 0
+
+        if focused == 1:
+            # Apply backspace first (deletes trailing char)
+            if input_has_backspace() == 1:
+                if current_len > 0:
+                    current_len = current_len - 1
+                    Memory.write_i8(buf + (current_len as i64), 0)
+                    changed = 1
+
+            # Append typed chars (already ASCII-filtered by input/chars.dlt)
+            typed: str = input_typed_chars()
+            tlen: i32 = Memory.strlen(typed) as i32
+            ti: i32 = 0
+            tc: i8 = 0 as i8
+            while ti < tlen:
+                if current_len >= max_len:
+                    break
+                tc = Memory.read_i8((typed as i64) + (ti as i64))
+                Memory.write_i8(buf + (current_len as i64), tc)
+                current_len = current_len + 1
+                ti = ti + 1
+                changed = 1
+            Memory.write_i8(buf + (current_len as i64), 0)
+
+        # --- Render ---
+        commands: UIDrawList = self._commands()
+        border_color: UIColor = self.theme_border
+        if focused == 1:
+            border_color = self.theme_accent
+        elif hovered == 1:
+            border_color = self.theme_surface_hover
+        r: i32 = self.theme_border_radius
+        if r > height / 2:
+            r = height / 2
+        commands.push_fill_rounded_rect(x, y, width, height, r, self.theme_surface)
+        commands.push_outline_rounded_rect(x, y, width, height, r, border_color, self.theme_border_width)
+        # Text content
+        content: str = buf as str
+        commands.push_text(x + 8, y + (height - 8) / 2, content, self.theme_text)
+        # Caret (blink at ~30fps alternation)
+        if focused == 1:
+            if (self.frame_counter / 30) & 1 == 0:
+                caret_x: i32 = x + 8 + current_len * 8
+                commands.push_fill_rect(caret_x, y + 6, 1, height - 12, self.theme_text)
+        self.command_count = commands.count
+        return changed

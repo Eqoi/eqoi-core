@@ -51,6 +51,25 @@ struct EqoiApp:
     theme_spacing: i32 = 12
     theme_padding: i32 = 14
     theme_border_width: i32 = 1
+    theme_border_radius: i32 = 6
+
+    # ---- Widget state (IMGUI-style identity tracking) ----
+    # Widget IDs are hashes of widget position + type tag, computed at
+    # call time. Only one of each is tracked at a time (pop-up nesting
+    # is not attempted in Phase 2).
+    hover_id: i64 = 0
+    focus_id: i64 = 0
+    drag_id: i64 = 0
+    hover_frames: i32 = 0
+    frame_counter: i32 = 0
+
+    # Persistent editing state for text_input (single in-flight field).
+    # When a text_input is focused for the first time it seeds the
+    # buffer from its *buffer_ptr; the buffer is drained back when
+    # focus is released.
+    text_edit_buf: i64 = 0
+    text_edit_len: i32 = 0
+    text_edit_caret: i32 = 0
 
 imple EqoiApp:
     static fun create(title: str, width: i32, height: i32) -> EqoiApp:
@@ -105,6 +124,7 @@ imple EqoiApp:
         self.theme_spacing = 12
         self.theme_padding = 14
         self.theme_border_width = 1
+        self.theme_border_radius = 6
 
     fun destroy(self):
         commands: UIDrawList = UIDrawList(
@@ -315,6 +335,70 @@ imple EqoiApp:
         commands.clear()
         commands.push_clear(self.width, self.height, self.theme_background)
         self.command_count = commands.count
+        # Per-frame state bookkeeping.
+        # If hover_id became unset (e.g. cursor left a widget) reset the
+        # hover duration counter so tooltips only fire on sustained hovers.
+        self.frame_counter = self.frame_counter + 1
+        # Widget code sets hover_id during layout. At the start of the
+        # next frame we *don't* clear it blindly — we let widgets
+        # re-assert it when they detect their own hover. Instead we just
+        # increment hover_frames when the same id is still hovered.
+        # (Widgets that stop being hovered simply stop re-asserting, and
+        # we clear at the top of end() if nobody re-asserted.)
+
+    # ---- Widget identity helpers ----
+    # Hash widget position + type tag into a 64-bit id.
+    # FNV-1a-ish; collisions are acceptable for hover/focus tracking.
+    fun widget_id(self, type_tag: i32, x: i32, y: i32) -> i64:
+        base: i64 = 14695981039346656037 as i64
+        prime: i64 = 1099511628211 as i64
+        h: i64 = base
+        h = (h ^ (type_tag as i64)) * prime
+        h = (h ^ (x as i64)) * prime
+        h = (h ^ (y as i64)) * prime
+        # avoid returning 0 which is our "no hover/focus" sentinel
+        if h == 0:
+            return 1
+        return h
+
+    fun set_hover(self, id: i64):
+        if self.hover_id == id:
+            self.hover_frames = self.hover_frames + 1
+        else:
+            self.hover_id = id
+            self.hover_frames = 0
+
+    fun is_focused(self, id: i64) -> i32:
+        if self.focus_id == id:
+            return 1
+        return 0
+
+    fun request_focus(self, id: i64):
+        self.focus_id = id
+
+    fun release_focus(self):
+        self.focus_id = 0
+
+    # Linear interpolation between two BGRA colors, t in [0, 100].
+    fun mix_colors(self, a: UIColor, b: UIColor, t_percent: i32) -> UIColor:
+        t: i32 = t_percent
+        if t < 0:
+            t = 0
+        if t > 100:
+            t = 100
+        ab: i32 = a & 255
+        ag: i32 = (a >> 8) & 255
+        ar: i32 = (a >> 16) & 255
+        aa: i32 = (a >> 24) & 255
+        bb: i32 = b & 255
+        bg: i32 = (b >> 8) & 255
+        br: i32 = (b >> 16) & 255
+        ba: i32 = (b >> 24) & 255
+        rb: i32 = (ab * (100 - t) + bb * t) / 100
+        rg: i32 = (ag * (100 - t) + bg * t) / 100
+        rr: i32 = (ar * (100 - t) + br * t) / 100
+        ra: i32 = (aa * (100 - t) + ba * t) / 100
+        return (rb & 255) | ((rg & 255) << 8) | ((rr & 255) << 16) | ((ra & 255) << 24)
 
     fun set_theme(self, theme: EqoiTheme):
         self.theme_background = theme.background

@@ -4,6 +4,7 @@
 # High-level native app framework built on top of ui.
 module eqoi
 import ui
+import input
 
 type UIColor = i32
 

@@ -3,12 +3,12 @@
 
 [info]
 name = eqoi
-version = 0.1.0
-description = Native application framework built on Dolet window and ui
+version = 0.3.0
+description = Native application framework for Dolet — widgets, theme, app loop. Pure-software renderer via ui + fonts.
 
 [dependencies]
-window = required
 ui = required
+input = required
 
 [link.windows]
 system_libs = user32, gdi32
