@@ -1,6 +1,12 @@
 # ============================
 #  Eqoi App
 # ============================
+# High-level app framework — owns the window + event pump, runs the
+# frame loop, delegates drawing to ui via draw_begin/canvas.end.
+# On top of that it adds the Phase-β clip stack (panel_begin/end) and
+# the Phase-γ widget context fields (tab bar, scrollable, dropdown,
+# modal) so the widgets in widgets.dlt have somewhere to store their
+# per-frame state.
 
 struct EqoiApp:
     window_handle: i64 = 0
@@ -53,32 +59,66 @@ struct EqoiApp:
     theme_border_width: i32 = 1
     theme_border_radius: i32 = 0
 
-    # ---- Widget state (IMGUI-style identity tracking) ----
-    # Widget IDs are hashes of widget position + type tag, computed at
-    # call time. Only one of each is tracked at a time (pop-up nesting
-    # is not attempted in Phase 2).
+    # ---- Widget-identity tracking ----
     hover_id: i64 = 0
     focus_id: i64 = 0
     drag_id: i64 = 0
     hover_frames: i32 = 0
     frame_counter: i32 = 0
 
-    # Persistent editing state for text_input (single in-flight field).
-    # When a text_input is focused for the first time it seeds the
-    # buffer from its *buffer_ptr; the buffer is drained back when
-    # focus is released.
+    # ---- text_input persistent buffers ----
     text_edit_buf: i64 = 0
     text_edit_len: i32 = 0
     text_edit_caret: i32 = 0
 
-    # ---- Managed widget state ----
-    # Users call app.alloc_bool / alloc_int / alloc_buf and get an
-    # opaque i64 handle. Eqoi remembers every handle in this buffer
-    # so destroy() can free them automatically — no manual
-    # Memory.malloc / Memory.free pairs in user code.
-    state_ptrs: i64 = 0        # malloc'd array of up to 256 i64 addresses
+    # ---- Managed state (alloc_bool/int/buf) ----
+    state_ptrs: i64 = 0
     state_count: i32 = 0
     state_capacity: i32 = 256
+
+    # ---- Clip stack (panel_begin/end nesting) ----
+    clip_x:    i64 = 0
+    clip_y:    i64 = 0
+    clip_w:    i64 = 0
+    clip_h:    i64 = 0
+    clip_top:  i32 = 0
+    clip_capacity: i32 = 16
+
+    # ---- Begin/end-style widget context ----
+    # Tab bar
+    tab_x: i32 = 0
+    tab_y: i32 = 0
+    tab_h: i32 = 0
+    tab_idx: i32 = 0
+    tab_cursor_x: i32 = 0
+    tab_active_ptr: i64 = 0
+    tab_changed: i32 = 0
+
+    # Scrollable region
+    sr_x: i32 = 0
+    sr_y: i32 = 0
+    sr_w: i32 = 0
+    sr_h: i32 = 0
+    sr_content_h: i32 = 0
+    sr_scroll_ptr: i64 = 0
+
+    # Dropdown
+    dd_x: i32 = 0
+    dd_y: i32 = 0
+    dd_w: i32 = 0
+    dd_h: i32 = 0
+    dd_selected_ptr: i64 = 0
+    dd_item_idx: i32 = 0
+    dd_id: i64 = 0
+
+    # Modal
+    md_active: i32 = 0
+
+    # "Canvas size this frame" — mirrors self.width/height but kept
+    # separate so responsive widgets (modal_begin) don't depend on
+    # whether the caller has resized since the last sync.
+    canvas_w: i32 = 0
+    canvas_h: i32 = 0
 
 imple EqoiApp:
     static fun create(title: str, width: i32, height: i32) -> EqoiApp:
@@ -102,6 +142,8 @@ imple EqoiApp:
         app.window_surface = 0
         app.width = width
         app.height = height
+        app.canvas_w = width
+        app.canvas_h = height
         app.valid = 1
 
         app.command_kinds = commands.kinds
@@ -136,8 +178,16 @@ imple EqoiApp:
         self.theme_border_radius = 0
 
     fun destroy(self):
-        # Free any user-managed state slots first
         self._free_state()
+        if self.clip_x != 0:
+            Memory.free(self.clip_x)
+            Memory.free(self.clip_y)
+            Memory.free(self.clip_w)
+            Memory.free(self.clip_h)
+            self.clip_x = 0
+            self.clip_y = 0
+            self.clip_w = 0
+            self.clip_h = 0
 
         commands: UIDrawList = UIDrawList(
             kinds=self.command_kinds,
@@ -194,7 +244,6 @@ imple EqoiApp:
     fun should_close(self) -> i32:
         if self.valid == 0:
             return 1
-
         win: Window = Window(
             handle=self.window_handle,
             hinstance=self.window_hinstance,
@@ -209,10 +258,6 @@ imple EqoiApp:
         self.window_should_close = win.should_close_flag
         return result
 
-    # Convenience inverse of should_close — reads as a natural game loop:
-    #   while app.running():
-    #       ...
-    # Returns 1 while the window is alive, 0 once it's been closed.
     fun running(self) -> i32:
         if self.should_close() == 1:
             return 0
@@ -221,7 +266,6 @@ imple EqoiApp:
     fun begin(self) -> i32:
         if self.valid == 0:
             return 0
-
         win: Window = Window(
             handle=self.window_handle,
             hinstance=self.window_hinstance,
@@ -241,7 +285,6 @@ imple EqoiApp:
     fun begin_poll(self) -> i32:
         if self.valid == 0:
             return 0
-
         win: Window = Window(
             handle=self.window_handle,
             hinstance=self.window_hinstance,
@@ -261,7 +304,6 @@ imple EqoiApp:
     fun begin_timeout(self, timeout_ms: i32) -> i32:
         if self.valid == 0:
             return 0
-
         win: Window = Window(
             handle=self.window_handle,
             hinstance=self.window_hinstance,
@@ -307,6 +349,8 @@ imple EqoiApp:
         self.window_hinstance = win.hinstance
         self.width = win.get_width()
         self.height = win.get_height()
+        self.canvas_w = self.width
+        self.canvas_h = self.height
         self.window_should_close = win.should_close_flag
         self.window_resized = win.is_resized
         self.window_focused = win.is_focused
@@ -336,13 +380,10 @@ imple EqoiApp:
         self.mouse_previous_left_down = mouse.previous_left_down
         self.mouse_previous_right_down = mouse.previous_right_down
         self.mouse_previous_middle_down = mouse.previous_middle_down
-        # Drive the input package each frame so slider/scrollbar/drag-drop
-        # widgets see up-to-date mouse_is_dragging / mouse_drag_delta_*.
+        # Also drive the input package so drag/wheel widgets work.
         update_mouse()
-
-        # Bridge window-owned events into input's accumulators.
-        # window and input are independent packages; eqoi is the place
-        # that wires them together (the same way a user app would).
+        # Forward window-owned events (wheel + typed chars + backspace)
+        # into input so scrollbar/text_input widgets can read them.
         wheel: f32 = window_consume_wheel_delta()
         if wheel != 0.0:
             add_scroll(wheel)
@@ -376,20 +417,20 @@ imple EqoiApp:
         commands.clear()
         commands.push_clear(self.width, self.height, self.theme_background)
         self.command_count = commands.count
-        # Per-frame state bookkeeping.
-        # If hover_id became unset (e.g. cursor left a widget) reset the
-        # hover duration counter so tooltips only fire on sustained hovers.
         self.frame_counter = self.frame_counter + 1
-        # Widget code sets hover_id during layout. At the start of the
-        # next frame we *don't* clear it blindly — we let widgets
-        # re-assert it when they detect their own hover. Instead we just
-        # increment hover_frames when the same id is still hovered.
-        # (Widgets that stop being hovered simply stop re-asserting, and
-        # we clear at the top of end() if nobody re-asserted.)
+        # Stale drag cleanup — if a drag ended and no drop_target claimed
+        # the payload, reset so a new drag can start cleanly.
+        if self.drag_id != 0 and mouse_is_dragging(MOUSE_LEFT) == 0:
+            self.drag_id = 0
+            self.text_edit_buf = self.frame_counter - self.frame_counter
+        # Clip stack resets to empty each frame.
+        self.clip_top = self.frame_counter - self.frame_counter
+        # Modal flag resets too — modal_begin/end are single-frame.
+        self.md_active = self.frame_counter - self.frame_counter
 
-    # ---- Widget identity helpers ----
-    # Hash widget position + type tag into a 64-bit id.
-    # FNV-1a-ish; collisions are acceptable for hover/focus tracking.
+    # ---------------------------------------------------------------
+    # Widget identity helpers
+    # ---------------------------------------------------------------
     fun widget_id(self, type_tag: i32, x: i32, y: i32) -> i64:
         base: i64 = 14695981039346656037 as i64
         prime: i64 = 1099511628211 as i64
@@ -397,7 +438,6 @@ imple EqoiApp:
         h = (h ^ (type_tag as i64)) * prime
         h = (h ^ (x as i64)) * prime
         h = (h ^ (y as i64)) * prime
-        # avoid returning 0 which is our "no hover/focus" sentinel
         if h == 0:
             return 1
         return h
@@ -420,7 +460,6 @@ imple EqoiApp:
     fun release_focus(self):
         self.focus_id = 0
 
-    # Linear interpolation between two BGRA colors, t in [0, 100].
     fun mix_colors(self, a: UIColor, b: UIColor, t_percent: i32) -> UIColor:
         t: i32 = t_percent
         if t < 0:
@@ -460,8 +499,6 @@ imple EqoiApp:
     #  Managed state — hides Memory.malloc / Memory.free from user code
     # ================================================================
 
-    # Internal: lazy-init the state_ptrs array and record a new allocation.
-    # Returns the same ptr for chaining.
     fun _track(self, ptr: i64) -> i64:
         if self.state_ptrs == 0:
             self.state_ptrs = Memory.malloc_zeroed((self.state_capacity as i64) * 8)
@@ -470,32 +507,20 @@ imple EqoiApp:
             self.state_count = self.state_count + 1
         return ptr
 
-    # Allocate a managed 32-bit boolean slot (0 or 1). Freed automatically
-    # on app.destroy(). Usage:
-    #   dark: i64 = app.alloc_bool(0)
-    #   ...
-    #   if app.checkbox(x, y, "Dark", dark) == 1: ...
-    #   if app.get_bool(dark) == 1: ...
     fun alloc_bool(self, initial: i32) -> i64:
         ptr: i64 = Memory.malloc_zeroed(4)
         Memory.write_i32(ptr, initial)
         return self._track(ptr)
 
-    # Allocate a managed 32-bit integer slot.
     fun alloc_int(self, initial: i32) -> i64:
         ptr: i64 = Memory.malloc_zeroed(4)
         Memory.write_i32(ptr, initial)
         return self._track(ptr)
 
-    # Allocate a managed zero-initialised byte buffer (for text_input).
-    # `capacity` is the number of storable characters; one extra byte
-    # is reserved for the trailing NUL terminator.
     fun alloc_buf(self, capacity: i32) -> i64:
         ptr: i64 = Memory.malloc_zeroed((capacity as i64) + 1)
         return self._track(ptr)
 
-    # Readers/writers — thin wrappers over Memory.* so user code reads
-    # naturally without pulling in the Memory module explicitly.
     fun get_bool(self, ptr: i64) -> i32:
         return Memory.read_i32(ptr)
 
@@ -508,8 +533,6 @@ imple EqoiApp:
     fun set_int(self, ptr: i64, value: i32):
         Memory.write_i32(ptr, value)
 
-    # Free every tracked allocation. Called from destroy() — users
-    # shouldn't need to invoke this directly.
     fun _free_state(self):
         if self.state_ptrs == 0:
             return
@@ -523,6 +546,102 @@ imple EqoiApp:
         Memory.free(self.state_ptrs)
         self.state_ptrs = 0
         self.state_count = 0
+
+    # ================================================================
+    #  Clip stack — used by panel_begin/end and scrollable_begin/end
+    # ================================================================
+
+    fun _clip_init(self):
+        if self.clip_x == 0:
+            self.clip_x = Memory.malloc_zeroed((self.clip_capacity as i64) * 4)
+            self.clip_y = Memory.malloc_zeroed((self.clip_capacity as i64) * 4)
+            self.clip_w = Memory.malloc_zeroed((self.clip_capacity as i64) * 4)
+            self.clip_h = Memory.malloc_zeroed((self.clip_capacity as i64) * 4)
+
+    fun push_clip(self, x: i32, y: i32, width: i32, height: i32):
+        self._clip_init()
+        if self.clip_top >= self.clip_capacity:
+            return
+        nx: i32 = x
+        ny: i32 = y
+        nw: i32 = width
+        nh: i32 = height
+        if self.clip_top > 0:
+            off: i64 = ((self.clip_top - 1) as i64) * 4
+            px: i32 = Memory.read_i32(self.clip_x + off)
+            py: i32 = Memory.read_i32(self.clip_y + off)
+            pw: i32 = Memory.read_i32(self.clip_w + off)
+            ph: i32 = Memory.read_i32(self.clip_h + off)
+            if nx < px:
+                nx = px
+            if ny < py:
+                ny = py
+            right: i32 = x + width
+            pright: i32 = px + pw
+            if right > pright:
+                right = pright
+            bottom: i32 = y + height
+            pbottom: i32 = py + ph
+            if bottom > pbottom:
+                bottom = pbottom
+            nw = right - nx
+            nh = bottom - ny
+            if nw < 0:
+                nw = nx - nx
+            if nh < 0:
+                nh = ny - ny
+        off2: i64 = (self.clip_top as i64) * 4
+        Memory.write_i32(self.clip_x + off2, nx)
+        Memory.write_i32(self.clip_y + off2, ny)
+        Memory.write_i32(self.clip_w + off2, nw)
+        Memory.write_i32(self.clip_h + off2, nh)
+        self.clip_top = self.clip_top + 1
+        cmds: UIDrawList = UIDrawList(
+            kinds=self.command_kinds,
+            xs=self.command_xs,
+            ys=self.command_ys,
+            widths=self.command_widths,
+            heights=self.command_heights,
+            x2s=self.command_x2s,
+            y2s=self.command_y2s,
+            colors=self.command_colors,
+            backgrounds=self.command_backgrounds,
+            thicknesses=self.command_thicknesses,
+            texts=self.command_texts,
+            count=self.command_count,
+            capacity=self.command_capacity
+        )
+        cmds.push_clip(nx, ny, nw, nh)
+        self.command_count = cmds.count
+
+    fun pop_clip(self):
+        if self.clip_top <= 0:
+            return
+        self.clip_top = self.clip_top - 1
+        cmds: UIDrawList = UIDrawList(
+            kinds=self.command_kinds,
+            xs=self.command_xs,
+            ys=self.command_ys,
+            widths=self.command_widths,
+            heights=self.command_heights,
+            x2s=self.command_x2s,
+            y2s=self.command_y2s,
+            colors=self.command_colors,
+            backgrounds=self.command_backgrounds,
+            thicknesses=self.command_thicknesses,
+            texts=self.command_texts,
+            count=self.command_count,
+            capacity=self.command_capacity
+        )
+        cmds.pop_clip()
+        if self.clip_top > 0:
+            off: i64 = ((self.clip_top - 1) as i64) * 4
+            px: i32 = Memory.read_i32(self.clip_x + off)
+            py: i32 = Memory.read_i32(self.clip_y + off)
+            pw: i32 = Memory.read_i32(self.clip_w + off)
+            ph: i32 = Memory.read_i32(self.clip_h + off)
+            cmds.push_clip(px, py, pw, ph)
+        self.command_count = cmds.count
 
 fun eqoi_app_create(title: str, width: i32, height: i32) -> EqoiApp:
     return EqoiApp.create(title, width, height)

@@ -1,64 +1,126 @@
 # Eqoi Framework
 
-Eqoi is a high-level native application framework for Dolet.
+Eqoi is a high-level native application framework for Dolet. It owns the
+window + event pump and layers widgets on top of `ui`.
 
 It is built on top of:
 
-- `window` for native windows and event handling
-- `ui` for native drawing, colors, text, mouse state, and draw commands
+- `window` — native windows and event pump
+- `ui` — pure-software drawing (rects, text, mouse state, draw commands)
+- `input` — mouse/keyboard/wheel accumulators
 
-Eqoi is intended for app builders who want a cleaner API than raw drawing calls while still keeping the native stack small and direct.
+Eqoi is aimed at app builders who want a cleaner API than raw drawing
+calls while keeping the native stack small and direct.
 
-## First API
+Current version: **0.4.0**
+
+## Quick start
 
 ```dolet
-import window
-import ui
 import eqoi
 
-app: EqoiApp = EqoiApp.create("Eqoi App", 800, 600)
+app: EqoiApp = EqoiApp.create("Hello Eqoi", 800, 600)
 if app.is_valid() == 0:
     print("failed to create app")
 else:
-    count: i32 = 0
+    count: i64 = app.alloc_int(0)
 
-    while app.should_close() == 0:
+    while app.running():
         if app.begin() == 1:
             app.title(32, 32, "Eqoi")
             app.muted_label(32, 72, "Native apps with a small framework layer.")
 
             if app.button(32, 112, 180, 44, "Click") == 1:
-                count = count + 1
+                app.set_int(count, app.get_int(count) + 1)
 
-            app.label(32, 176, Convert.i32_to_str(count))
+            app.label(32, 176, Convert.i32_to_str(app.get_int(count)))
             app.end()
 
     app.destroy()
 ```
 
+## Widget catalogue
+
+### Text / decoration
+- `title(x, y, value)`
+- `label(x, y, value)` / `muted_label(x, y, value)` / `text(x, y, value, color)`
+- `rect(x, y, w, h, color)` / `outline(x, y, w, h, color)` / `separator(x, y, w)`
+- `panel(x, y, w, h)` — single surface panel
+
+### Inputs
+- `button(x, y, w, h, label) -> i32` / `secondary_button(...)`
+- `checkbox(x, y, label, value_ptr) -> i32`
+- `toggle(x, y, label, value_ptr) -> i32`
+- `slider(x, y, w, min, max, value_ptr) -> i32`
+- `progress_bar(x, y, w, h, percent)`
+- `text_input(x, y, w, h, buf, max_len) -> i32`
+- `tooltip(widget_id, text)`
+
+### Responsive containers
+- `panel_begin(x, y, w, h)` / `panel_end()` — nested clip stack (16 levels).
+  Anything drawn between the two calls is auto-clipped to the panel.
+- `modal_begin(w, h, title) -> i32` / `modal_end()` — auto-centres on the
+  current canvas, so it re-centres on window resize.
+
+### Advanced widgets
+- `scrollbar_vertical(x, y, h, view_h, content_h, scroll_ptr) -> i32`
+- `scrollable_begin(x, y, w, h, scroll_ptr, content_h)` / `scrollable_end()`
+- `tab_bar_begin(x, y, w, h, active_ptr)` / `tab_bar_item(label, w) -> i32` / `tab_bar_end() -> i32`
+- `dropdown_begin(x, y, w, h, selected_ptr, label) -> i32` / `dropdown_item(label) -> i32` / `dropdown_end()`
+- `drag_source(x, y, w, h, payload) -> i32` / `drop_target(x, y, w, h) -> i64`
+
+## Managed state
+
+No manual `Memory.malloc` / `Memory.free` pairs in user code. Allocate
+slots on the app; eqoi frees them in `destroy()`.
+
+```dolet
+dark:    i64 = app.alloc_bool(0)
+volume:  i64 = app.alloc_int(40)
+name:    i64 = app.alloc_buf(60)
+
+app.checkbox(48, 180, "Dark mode", dark)
+app.slider(48, 280, 360, 0, 100, volume)
+app.text_input(48, 414, 360, 30, name, 60)
+
+if app.get_bool(dark) == 1:
+    # apply dark theme
+```
+
 ## Layout
 
 ```text
-mod.dlt
-module.meta
-theme.dlt
-app.dlt
-widgets.dlt
+mod.dlt         # module declaration, exports, load statements
+module.meta     # package metadata + deps + link settings
+theme.dlt       # EqoiTheme struct + dark theme preset
+app.dlt         # EqoiApp — window, frame loop, state, clip stack, theme
+widgets.dlt     # every widget method on EqoiApp
 ```
+
+## Dependencies
+
+```ini
+window = required
+ui = required
+input = required
+```
+
+## Link (Windows)
+
+```ini
+system_libs = user32, gdi32
+```
+
+Linux and macOS backends are planned once the matching `window`/`ui`
+backends land.
 
 ## Direction
 
-Eqoi should grow as the app framework layer:
+- More layout helpers (rows/columns, alignment) — currently the caller
+  gives absolute coordinates; the clip stack already prevents overflow.
+- Keyboard navigation / accessibility hooks.
+- Animation timelines for transitions.
+- Richer text (wrap, alignment, variable-width glyphs — needs fonts upgrade).
 
-- buttons
-- labels
-- panels
-- text input
-- layout helpers
-- themes
-- app lifecycle
-- eventually routing/navigation or document-style app helpers
-
-Low-level drawing remains in `ui`. Window creation and event waiting remain in `window`.
-
-Current compiler note: consumers should import `window` and `ui` before `eqoi` so the compiler resolves native structs and color aliases correctly.
+Low-level drawing stays in `ui`. Window creation and event waiting stay
+in `window`. Eqoi only composes them.

@@ -237,38 +237,6 @@ imple EqoiApp:
     #  Phase-2 widgets
     # ======================================================================
 
-    # Helper: build a UIMouseState from the app's own mouse snapshot.
-    fun _mouse_snap(self) -> UIMouseState:
-        return UIMouseState(
-            x=self.mouse_x,
-            y=self.mouse_y,
-            previous_x=self.mouse_previous_x,
-            previous_y=self.mouse_previous_y,
-            left_down=self.mouse_left_down,
-            right_down=self.mouse_right_down,
-            middle_down=self.mouse_middle_down,
-            previous_left_down=self.mouse_previous_left_down,
-            previous_right_down=self.mouse_previous_right_down,
-            previous_middle_down=self.mouse_previous_middle_down
-        )
-
-    fun _commands(self) -> UIDrawList:
-        return UIDrawList(
-            kinds=self.command_kinds,
-            xs=self.command_xs,
-            ys=self.command_ys,
-            widths=self.command_widths,
-            heights=self.command_heights,
-            x2s=self.command_x2s,
-            y2s=self.command_y2s,
-            colors=self.command_colors,
-            backgrounds=self.command_backgrounds,
-            thicknesses=self.command_thicknesses,
-            texts=self.command_texts,
-            count=self.command_count,
-            capacity=self.command_capacity
-        )
-
     # ---------------------------------------------------------------
     # Checkbox — 16x16 plain square box with a white tick when checked.
     # Matches the look you get out-of-the-box on web forms / native apps.
@@ -276,14 +244,14 @@ imple EqoiApp:
     fun checkbox(self, x: i32, y: i32, label: str, value_ptr: i64) -> i32:
         box: i32 = 16
         id: i64 = self.widget_id(100, x, y)
-        mouse: UIMouseState = self._mouse_snap()
+        mouse: UIMouseState = UIMouseState(x=self.mouse_x, y=self.mouse_y, previous_x=self.mouse_previous_x, previous_y=self.mouse_previous_y, left_down=self.mouse_left_down, right_down=self.mouse_right_down, middle_down=self.mouse_middle_down, previous_left_down=self.mouse_previous_left_down, previous_right_down=self.mouse_previous_right_down, previous_middle_down=self.mouse_previous_middle_down)
         hovered: i32 = mouse.is_over_xy(x, y, box, box)
         if hovered == 1:
             self.set_hover(id)
 
         current: i32 = Memory.read_i32(value_ptr)
 
-        commands: UIDrawList = self._commands()
+        commands: UIDrawList = UIDrawList(kinds=self.command_kinds, xs=self.command_xs, ys=self.command_ys, widths=self.command_widths, heights=self.command_heights, x2s=self.command_x2s, y2s=self.command_y2s, colors=self.command_colors, backgrounds=self.command_backgrounds, thicknesses=self.command_thicknesses, texts=self.command_texts, count=self.command_count, capacity=self.command_capacity)
         # Box fill: accent when checked, else surface
         fill: UIColor = self.theme_surface
         border: UIColor = self.theme_border
@@ -322,7 +290,7 @@ imple EqoiApp:
         w: i32 = 40
         h: i32 = 20
         id: i64 = self.widget_id(101, x, y)
-        mouse: UIMouseState = self._mouse_snap()
+        mouse: UIMouseState = UIMouseState(x=self.mouse_x, y=self.mouse_y, previous_x=self.mouse_previous_x, previous_y=self.mouse_previous_y, left_down=self.mouse_left_down, right_down=self.mouse_right_down, middle_down=self.mouse_middle_down, previous_left_down=self.mouse_previous_left_down, previous_right_down=self.mouse_previous_right_down, previous_middle_down=self.mouse_previous_middle_down)
         hovered: i32 = mouse.is_over_xy(x, y, w, h)
         if hovered == 1:
             self.set_hover(id)
@@ -337,7 +305,7 @@ imple EqoiApp:
         elif hovered == 1:
             track_color = self.theme_surface_hover
 
-        commands: UIDrawList = self._commands()
+        commands: UIDrawList = UIDrawList(kinds=self.command_kinds, xs=self.command_xs, ys=self.command_ys, widths=self.command_widths, heights=self.command_heights, x2s=self.command_x2s, y2s=self.command_y2s, colors=self.command_colors, backgrounds=self.command_backgrounds, thicknesses=self.command_thicknesses, texts=self.command_texts, count=self.command_count, capacity=self.command_capacity)
         commands.push_fill_rounded_rect(x, y, w, h, h / 2, track_color)
         # Knob: white circle that slides between left and right ends
         knob_r: i32 = (h / 2) - 3
@@ -366,7 +334,7 @@ imple EqoiApp:
     fun slider(self, x: i32, y: i32, width: i32, min_v: i32, max_v: i32, value_ptr: i64) -> i32:
         h: i32 = 20
         id: i64 = self.widget_id(102, x, y)
-        mouse: UIMouseState = self._mouse_snap()
+        mouse: UIMouseState = UIMouseState(x=self.mouse_x, y=self.mouse_y, previous_x=self.mouse_previous_x, previous_y=self.mouse_previous_y, left_down=self.mouse_left_down, right_down=self.mouse_right_down, middle_down=self.mouse_middle_down, previous_left_down=self.mouse_previous_left_down, previous_right_down=self.mouse_previous_right_down, previous_middle_down=self.mouse_previous_middle_down)
         hovered: i32 = mouse.is_over_xy(x, y, width, h)
         if hovered == 1:
             self.set_hover(id)
@@ -400,7 +368,7 @@ imple EqoiApp:
             self.drag_id = 0
 
         # --- Render ---
-        commands: UIDrawList = self._commands()
+        commands: UIDrawList = UIDrawList(kinds=self.command_kinds, xs=self.command_xs, ys=self.command_ys, widths=self.command_widths, heights=self.command_heights, x2s=self.command_x2s, y2s=self.command_y2s, colors=self.command_colors, backgrounds=self.command_backgrounds, thicknesses=self.command_thicknesses, texts=self.command_texts, count=self.command_count, capacity=self.command_capacity)
         track_h: i32 = 6
         track_y: i32 = y + (h - track_h) / 2
         # Track background
@@ -430,7 +398,7 @@ imple EqoiApp:
             p = 0
         if p > 100:
             p = 100
-        commands: UIDrawList = self._commands()
+        commands: UIDrawList = UIDrawList(kinds=self.command_kinds, xs=self.command_xs, ys=self.command_ys, widths=self.command_widths, heights=self.command_heights, x2s=self.command_x2s, y2s=self.command_y2s, colors=self.command_colors, backgrounds=self.command_backgrounds, thicknesses=self.command_thicknesses, texts=self.command_texts, count=self.command_count, capacity=self.command_capacity)
         commands.push_fill_rect(x, y, width, height, self.theme_surface)
         fill_w: i32 = (width * p) / 100
         if fill_w > 0:
@@ -452,7 +420,7 @@ imple EqoiApp:
         ty: i32 = self.mouse_y + 12
         w: i32 = (Memory.strlen(text) as i32) * 8 + 16
         h: i32 = 22
-        commands: UIDrawList = self._commands()
+        commands: UIDrawList = UIDrawList(kinds=self.command_kinds, xs=self.command_xs, ys=self.command_ys, widths=self.command_widths, heights=self.command_heights, x2s=self.command_x2s, y2s=self.command_y2s, colors=self.command_colors, backgrounds=self.command_backgrounds, thicknesses=self.command_thicknesses, texts=self.command_texts, count=self.command_count, capacity=self.command_capacity)
         commands.push_fill_rounded_rect(tx, ty, w, h, 4, self.theme_surface_active)
         commands.push_outline_rounded_rect(tx, ty, w, h, 4, self.theme_border, 1)
         commands.push_text(tx + 8, ty + 7, text, self.theme_text)
@@ -467,7 +435,7 @@ imple EqoiApp:
     # ---------------------------------------------------------------
     fun text_input(self, x: i32, y: i32, width: i32, height: i32, buf: i64, max_len: i32) -> i32:
         id: i64 = self.widget_id(104, x, y)
-        mouse: UIMouseState = self._mouse_snap()
+        mouse: UIMouseState = UIMouseState(x=self.mouse_x, y=self.mouse_y, previous_x=self.mouse_previous_x, previous_y=self.mouse_previous_y, left_down=self.mouse_left_down, right_down=self.mouse_right_down, middle_down=self.mouse_middle_down, previous_left_down=self.mouse_previous_left_down, previous_right_down=self.mouse_previous_right_down, previous_middle_down=self.mouse_previous_middle_down)
         hovered: i32 = mouse.is_over_xy(x, y, width, height)
         if hovered == 1:
             self.set_hover(id)
@@ -517,7 +485,7 @@ imple EqoiApp:
             Memory.write_i8(buf + (current_len as i64), 0)
 
         # --- Render ---
-        commands: UIDrawList = self._commands()
+        commands: UIDrawList = UIDrawList(kinds=self.command_kinds, xs=self.command_xs, ys=self.command_ys, widths=self.command_widths, heights=self.command_heights, x2s=self.command_x2s, y2s=self.command_y2s, colors=self.command_colors, backgrounds=self.command_backgrounds, thicknesses=self.command_thicknesses, texts=self.command_texts, count=self.command_count, capacity=self.command_capacity)
         border_color: UIColor = self.theme_border
         if focused == 1:
             border_color = self.theme_accent
@@ -538,3 +506,335 @@ imple EqoiApp:
                 commands.push_fill_rect(caret_x, y + 6, 1, height - 12, self.theme_text)
         self.command_count = commands.count
         return changed
+
+    # ======================================================================
+    #  Phase β: panel container with clip stack (responsive)
+    # ======================================================================
+
+    # panel_begin: draws a surface panel + pushes a clip region so every
+    # widget drawn until panel_end stays inside the panel's inner rect.
+    # When the window shrinks, widgets inside the panel visually clip
+    # at the panel boundary instead of spilling into neighbours.
+    fun panel_begin(self, x: i32, y: i32, width: i32, height: i32):
+        commands: UIDrawList = UIDrawList(kinds=self.command_kinds, xs=self.command_xs, ys=self.command_ys, widths=self.command_widths, heights=self.command_heights, x2s=self.command_x2s, y2s=self.command_y2s, colors=self.command_colors, backgrounds=self.command_backgrounds, thicknesses=self.command_thicknesses, texts=self.command_texts, count=self.command_count, capacity=self.command_capacity)
+        commands.push_fill_rect(x, y, width, height, self.theme_surface)
+        commands.push_outline_rect(x, y, width, height, self.theme_border, self.theme_border_width)
+        self.command_count = commands.count
+        # Inner clip rect leaves room for the border.
+        pad: i32 = self.theme_border_width
+        if pad < 1:
+            pad = 1
+        self.push_clip(x + pad, y + pad, width - 2 * pad, height - 2 * pad)
+
+    fun panel_end(self):
+        self.pop_clip()
+
+    # ======================================================================
+    #  Phase γ: scrollbar + scrollable region + tab bar + dropdown + modal
+    #           + drag/drop — all read mouse from self.mouse_* and respect
+    #           the active panel clip automatically via the push_clip
+    #           commands in the stream.
+    # ======================================================================
+
+    # ---------------------------------------------------------------
+    # Vertical scrollbar — standalone or embedded in scrollable_region.
+    # scroll_ptr stores an i32 pixel offset in [0 .. content_h - view_h].
+    # Returns 1 on scroll change, else 0.
+    # ---------------------------------------------------------------
+    fun scrollbar_vertical(self, x: i32, y: i32, height: i32, view_h: i32, content_h: i32, scroll_ptr: i64) -> i32:
+        w: i32 = 12
+        id: i64 = self.widget_id(120, x, y)
+        mouse: UIMouseState = UIMouseState(x=self.mouse_x, y=self.mouse_y, previous_x=self.mouse_previous_x, previous_y=self.mouse_previous_y, left_down=self.mouse_left_down, right_down=self.mouse_right_down, middle_down=self.mouse_middle_down, previous_left_down=self.mouse_previous_left_down, previous_right_down=self.mouse_previous_right_down, previous_middle_down=self.mouse_previous_middle_down)
+        hovered_track: i32 = mouse.is_over_xy(x, y, w, height)
+        if hovered_track == 1:
+            self.set_hover(id)
+
+        scroll: i32 = Memory.read_i32(scroll_ptr)
+        max_scroll: i32 = content_h - view_h
+        if max_scroll < 0:
+            max_scroll = 0
+        if scroll < 0:
+            scroll = 0
+        if scroll > max_scroll:
+            scroll = max_scroll
+
+        # Thumb height — proportional to visible fraction
+        thumb_h: i32 = height
+        if content_h > view_h:
+            thumb_h = (height * view_h) / content_h
+        if thumb_h < 16:
+            thumb_h = 16
+        thumb_y: i32 = y
+        if max_scroll > 0:
+            thumb_y = y + ((height - thumb_h) * scroll) / max_scroll
+
+        hovered_thumb: i32 = mouse.is_over_xy(x, thumb_y, w, thumb_h)
+
+        if hovered_thumb == 1 and mouse.left_pressed() == 1:
+            self.drag_id = id
+
+        changed: i32 = 0
+        if self.drag_id == id and mouse_is_dragging(MOUSE_LEFT) == 1:
+            if max_scroll > 0 and (height - thumb_h) > 0:
+                new_thumb_y: i32 = self.mouse_y - (thumb_h / 2)
+                if new_thumb_y < y:
+                    new_thumb_y = y
+                if new_thumb_y > (y + height - thumb_h):
+                    new_thumb_y = y + height - thumb_h
+                new_scroll: i32 = ((new_thumb_y - y) * max_scroll) / (height - thumb_h)
+                if new_scroll != scroll:
+                    scroll = new_scroll
+                    changed = 1
+
+        # Mouse wheel scroll when track is hovered
+        if hovered_track == 1:
+            wheel: f32 = mouse_scroll()
+            if wheel != 0.0:
+                new_scroll: i32 = scroll - ((wheel * 40.0) as i32)
+                if new_scroll < 0:
+                    new_scroll = 0
+                if new_scroll > max_scroll:
+                    new_scroll = max_scroll
+                if new_scroll != scroll:
+                    scroll = new_scroll
+                    changed = 1
+                reset_scroll()
+
+        if changed == 1:
+            Memory.write_i32(scroll_ptr, scroll)
+            if max_scroll > 0:
+                thumb_y = y + ((height - thumb_h) * scroll) / max_scroll
+
+        commands: UIDrawList = UIDrawList(kinds=self.command_kinds, xs=self.command_xs, ys=self.command_ys, widths=self.command_widths, heights=self.command_heights, x2s=self.command_x2s, y2s=self.command_y2s, colors=self.command_colors, backgrounds=self.command_backgrounds, thicknesses=self.command_thicknesses, texts=self.command_texts, count=self.command_count, capacity=self.command_capacity)
+        commands.push_fill_rect(x, y, w, height, self.theme_surface)
+        thumb_color: UIColor = self.theme_surface_hover
+        if hovered_thumb == 1 or self.drag_id == id:
+            thumb_color = self.theme_accent
+        commands.push_fill_rect(x + 2, thumb_y + 2, w - 4, thumb_h - 4, thumb_color)
+        self.command_count = commands.count
+        return changed
+
+    # ---------------------------------------------------------------
+    # Scrollable region — begin/end pair. Pushes a clip to (x, y, w-14, h)
+    # and auto-draws a scrollbar on the right edge in scrollable_end.
+    # Callers position their content at (cx, cy - scroll_y) themselves.
+    # ---------------------------------------------------------------
+    fun scrollable_begin(self, x: i32, y: i32, width: i32, height: i32, scroll_ptr: i64, content_h: i32):
+        commands: UIDrawList = UIDrawList(kinds=self.command_kinds, xs=self.command_xs, ys=self.command_ys, widths=self.command_widths, heights=self.command_heights, x2s=self.command_x2s, y2s=self.command_y2s, colors=self.command_colors, backgrounds=self.command_backgrounds, thicknesses=self.command_thicknesses, texts=self.command_texts, count=self.command_count, capacity=self.command_capacity)
+        commands.push_fill_rect(x, y, width, height, self.theme_surface)
+        commands.push_outline_rect(x, y, width, height, self.theme_border, self.theme_border_width)
+        self.command_count = commands.count
+        # Remember params so scrollable_end can draw the scrollbar.
+        self.sr_x = x
+        self.sr_y = y
+        self.sr_w = width
+        self.sr_h = height
+        self.sr_content_h = content_h
+        self.sr_scroll_ptr = scroll_ptr
+        # Clip content to the inner area (minus scrollbar column).
+        self.push_clip(x + 1, y + 1, width - 14, height - 2)
+
+    fun scrollable_end(self):
+        self.pop_clip()
+        self.scrollbar_vertical(self.sr_x + self.sr_w - 12, self.sr_y, self.sr_h, self.sr_h, self.sr_content_h, self.sr_scroll_ptr)
+
+    # ---------------------------------------------------------------
+    # Tab bar — begin/item/end. Items rendered left-to-right with the
+    # caller-supplied per-item width. The active tab shows an accent
+    # underline.
+    # ---------------------------------------------------------------
+    fun tab_bar_begin(self, x: i32, y: i32, width: i32, height: i32, active_ptr: i64):
+        self.tab_x = x
+        self.tab_y = y
+        self.tab_h = height
+        self.tab_idx = 0
+        self.tab_cursor_x = x
+        self.tab_active_ptr = active_ptr
+        self.tab_changed = 0
+        commands: UIDrawList = UIDrawList(kinds=self.command_kinds, xs=self.command_xs, ys=self.command_ys, widths=self.command_widths, heights=self.command_heights, x2s=self.command_x2s, y2s=self.command_y2s, colors=self.command_colors, backgrounds=self.command_backgrounds, thicknesses=self.command_thicknesses, texts=self.command_texts, count=self.command_count, capacity=self.command_capacity)
+        commands.push_fill_rect(x, y, width, height, self.theme_background)
+        commands.push_line(x, y + height - 1, x + width, y + height - 1, self.theme_border, 1)
+        self.command_count = commands.count
+
+    fun tab_bar_item(self, label: str, item_width: i32) -> i32:
+        active: i32 = Memory.read_i32(self.tab_active_ptr)
+        is_active: i32 = 0
+        if active == self.tab_idx:
+            is_active = 1
+
+        id: i64 = self.widget_id(130, self.tab_cursor_x, self.tab_y)
+        mouse: UIMouseState = UIMouseState(x=self.mouse_x, y=self.mouse_y, previous_x=self.mouse_previous_x, previous_y=self.mouse_previous_y, left_down=self.mouse_left_down, right_down=self.mouse_right_down, middle_down=self.mouse_middle_down, previous_left_down=self.mouse_previous_left_down, previous_right_down=self.mouse_previous_right_down, previous_middle_down=self.mouse_previous_middle_down)
+        hovered: i32 = mouse.is_over_xy(self.tab_cursor_x, self.tab_y, item_width, self.tab_h)
+        if hovered == 1:
+            self.set_hover(id)
+
+        commands: UIDrawList = UIDrawList(kinds=self.command_kinds, xs=self.command_xs, ys=self.command_ys, widths=self.command_widths, heights=self.command_heights, x2s=self.command_x2s, y2s=self.command_y2s, colors=self.command_colors, backgrounds=self.command_backgrounds, thicknesses=self.command_thicknesses, texts=self.command_texts, count=self.command_count, capacity=self.command_capacity)
+        text_color: UIColor = self.theme_muted_text
+        if is_active == 1 or hovered == 1:
+            text_color = self.theme_text
+        label_w: i32 = (Memory.strlen(label) as i32) * 8
+        commands.push_text(self.tab_cursor_x + (item_width - label_w) / 2, self.tab_y + (self.tab_h - 8) / 2, label, text_color)
+        if is_active == 1:
+            commands.push_fill_rect(self.tab_cursor_x, self.tab_y + self.tab_h - 3, item_width, 3, self.theme_accent)
+        self.command_count = commands.count
+
+        changed: i32 = 0
+        if hovered == 1 and mouse.left_pressed() == 1 and is_active == 0:
+            Memory.write_i32(self.tab_active_ptr, self.tab_idx)
+            self.tab_changed = 1
+            changed = 1
+
+        self.tab_idx = self.tab_idx + 1
+        self.tab_cursor_x = self.tab_cursor_x + item_width
+        return changed
+
+    fun tab_bar_end(self) -> i32:
+        return self.tab_changed
+
+    # ---------------------------------------------------------------
+    # Dropdown — begin/item/end. Closed state is a button-like surface
+    # showing the selected label; clicking toggles open. Clicking an
+    # item picks + closes.
+    # ---------------------------------------------------------------
+    fun dropdown_begin(self, x: i32, y: i32, width: i32, height: i32, selected_ptr: i64, selected_label: str) -> i32:
+        id: i64 = self.widget_id(140, x, y)
+        self.dd_x = x
+        self.dd_y = y
+        self.dd_w = width
+        self.dd_h = height
+        self.dd_selected_ptr = selected_ptr
+        self.dd_item_idx = 0
+        self.dd_id = id
+
+        mouse: UIMouseState = UIMouseState(x=self.mouse_x, y=self.mouse_y, previous_x=self.mouse_previous_x, previous_y=self.mouse_previous_y, left_down=self.mouse_left_down, right_down=self.mouse_right_down, middle_down=self.mouse_middle_down, previous_left_down=self.mouse_previous_left_down, previous_right_down=self.mouse_previous_right_down, previous_middle_down=self.mouse_previous_middle_down)
+        hovered: i32 = mouse.is_over_xy(x, y, width, height)
+        if hovered == 1:
+            self.set_hover(id)
+
+        is_open: i32 = 0
+        if self.focus_id == id:
+            is_open = 1
+
+        if hovered == 1 and mouse.left_pressed() == 1:
+            if is_open == 1:
+                self.focus_id = 0
+                is_open = 0
+            else:
+                self.focus_id = id
+                is_open = 1
+
+        commands: UIDrawList = UIDrawList(kinds=self.command_kinds, xs=self.command_xs, ys=self.command_ys, widths=self.command_widths, heights=self.command_heights, x2s=self.command_x2s, y2s=self.command_y2s, colors=self.command_colors, backgrounds=self.command_backgrounds, thicknesses=self.command_thicknesses, texts=self.command_texts, count=self.command_count, capacity=self.command_capacity)
+        fill: UIColor = self.theme_surface
+        if hovered == 1:
+            fill = self.theme_surface_hover
+        commands.push_fill_rect(x, y, width, height, fill)
+        commands.push_outline_rect(x, y, width, height, self.theme_border, self.theme_border_width)
+        commands.push_text(x + 10, y + (height - 8) / 2, selected_label, self.theme_text)
+        chev_cx: i32 = x + width - 10
+        chev_cy: i32 = y + height / 2
+        commands.push_line(chev_cx - 4, chev_cy - 2, chev_cx,     chev_cy + 2, self.theme_muted_text, 1)
+        commands.push_line(chev_cx,     chev_cy + 2, chev_cx + 4, chev_cy - 2, self.theme_muted_text, 1)
+        self.command_count = commands.count
+        return is_open
+
+    fun dropdown_item(self, label: str) -> i32:
+        item_y: i32 = self.dd_y + self.dd_h + self.dd_item_idx * self.dd_h
+        id: i64 = self.widget_id(141, self.dd_x, item_y)
+        mouse: UIMouseState = UIMouseState(x=self.mouse_x, y=self.mouse_y, previous_x=self.mouse_previous_x, previous_y=self.mouse_previous_y, left_down=self.mouse_left_down, right_down=self.mouse_right_down, middle_down=self.mouse_middle_down, previous_left_down=self.mouse_previous_left_down, previous_right_down=self.mouse_previous_right_down, previous_middle_down=self.mouse_previous_middle_down)
+        hovered: i32 = mouse.is_over_xy(self.dd_x, item_y, self.dd_w, self.dd_h)
+        if hovered == 1:
+            self.set_hover(id)
+
+        selected: i32 = 0
+        if Memory.read_i32(self.dd_selected_ptr) == self.dd_item_idx:
+            selected = 1
+
+        commands: UIDrawList = UIDrawList(kinds=self.command_kinds, xs=self.command_xs, ys=self.command_ys, widths=self.command_widths, heights=self.command_heights, x2s=self.command_x2s, y2s=self.command_y2s, colors=self.command_colors, backgrounds=self.command_backgrounds, thicknesses=self.command_thicknesses, texts=self.command_texts, count=self.command_count, capacity=self.command_capacity)
+        fill: UIColor = self.theme_surface
+        if hovered == 1:
+            fill = self.theme_surface_hover
+        elif selected == 1:
+            fill = self.theme_surface_active
+        commands.push_fill_rect(self.dd_x, item_y, self.dd_w, self.dd_h, fill)
+        commands.push_text(self.dd_x + 10, item_y + (self.dd_h - 8) / 2, label, self.theme_text)
+        self.command_count = commands.count
+
+        picked: i32 = 0
+        if hovered == 1 and mouse.left_pressed() == 1:
+            Memory.write_i32(self.dd_selected_ptr, self.dd_item_idx)
+            self.focus_id = 0
+            picked = 1
+
+        self.dd_item_idx = self.dd_item_idx + 1
+        return picked
+
+    fun dropdown_end(self):
+        if self.dd_item_idx > 0:
+            h: i32 = self.dd_item_idx * self.dd_h
+            commands: UIDrawList = UIDrawList(kinds=self.command_kinds, xs=self.command_xs, ys=self.command_ys, widths=self.command_widths, heights=self.command_heights, x2s=self.command_x2s, y2s=self.command_y2s, colors=self.command_colors, backgrounds=self.command_backgrounds, thicknesses=self.command_thicknesses, texts=self.command_texts, count=self.command_count, capacity=self.command_capacity)
+            commands.push_outline_rect(self.dd_x, self.dd_y + self.dd_h, self.dd_w, h, self.theme_border, self.theme_border_width)
+            self.command_count = commands.count
+
+    # ---------------------------------------------------------------
+    # Modal — responsive: auto-centers on canvas_w/canvas_h every frame,
+    # so it stays centered when the window is resized.
+    # ---------------------------------------------------------------
+    fun modal_begin(self, width: i32, height: i32, title: str) -> i32:
+        if self.md_active == 1:
+            return 0
+        self.md_active = 1
+        mx: i32 = (self.canvas_w - width) / 2
+        my: i32 = (self.canvas_h - height) / 2
+        commands: UIDrawList = UIDrawList(kinds=self.command_kinds, xs=self.command_xs, ys=self.command_ys, widths=self.command_widths, heights=self.command_heights, x2s=self.command_x2s, y2s=self.command_y2s, colors=self.command_colors, backgrounds=self.command_backgrounds, thicknesses=self.command_thicknesses, texts=self.command_texts, count=self.command_count, capacity=self.command_capacity)
+        # Backdrop over the whole canvas
+        commands.push_fill_rect(0, 0, self.canvas_w, self.canvas_h, self.theme_surface_active)
+        # Panel
+        commands.push_fill_rect(mx, my, width, height, self.theme_surface)
+        commands.push_outline_rect(mx, my, width, height, self.theme_border, self.theme_border_width)
+        # Title bar
+        if Memory.strlen(title) > 0:
+            commands.push_fill_rect(mx, my, width, 32, self.theme_background)
+            commands.push_text(mx + 14, my + 12, title, self.theme_text)
+            commands.push_line(mx, my + 32, mx + width, my + 32, self.theme_border, 1)
+        self.command_count = commands.count
+        return 1
+
+    fun modal_end(self):
+        self.md_active = 0
+
+    # ---------------------------------------------------------------
+    # Drag source / drop target. drag_source records (x, y, w, h,
+    # payload) and returns 1 while the user is actively dragging.
+    # drop_target highlights while a drag hovers and returns the
+    # payload on release. begin_frame clears a stale drag_id if the
+    # mouse stopped dragging and no drop_target claimed the payload.
+    # ---------------------------------------------------------------
+    fun drag_source(self, x: i32, y: i32, width: i32, height: i32, payload: i64) -> i32:
+        id: i64 = self.widget_id(150, x, y)
+        mouse: UIMouseState = UIMouseState(x=self.mouse_x, y=self.mouse_y, previous_x=self.mouse_previous_x, previous_y=self.mouse_previous_y, left_down=self.mouse_left_down, right_down=self.mouse_right_down, middle_down=self.mouse_middle_down, previous_left_down=self.mouse_previous_left_down, previous_right_down=self.mouse_previous_right_down, previous_middle_down=self.mouse_previous_middle_down)
+        hovered: i32 = mouse.is_over_xy(x, y, width, height)
+        if hovered == 1:
+            self.set_hover(id)
+        # Grab drag on press; store payload in text_edit_buf slot.
+        if hovered == 1 and mouse.left_pressed() == 1:
+            self.drag_id = id
+            self.text_edit_buf = payload
+        if self.drag_id == id:
+            return 1
+        return 0
+
+    fun drop_target(self, x: i32, y: i32, width: i32, height: i32) -> i64:
+        if self.drag_id == 0:
+            return 0
+        mouse: UIMouseState = UIMouseState(x=self.mouse_x, y=self.mouse_y, previous_x=self.mouse_previous_x, previous_y=self.mouse_previous_y, left_down=self.mouse_left_down, right_down=self.mouse_right_down, middle_down=self.mouse_middle_down, previous_left_down=self.mouse_previous_left_down, previous_right_down=self.mouse_previous_right_down, previous_middle_down=self.mouse_previous_middle_down)
+        over: i32 = mouse.is_over_xy(x, y, width, height)
+        if over == 1:
+            commands: UIDrawList = UIDrawList(kinds=self.command_kinds, xs=self.command_xs, ys=self.command_ys, widths=self.command_widths, heights=self.command_heights, x2s=self.command_x2s, y2s=self.command_y2s, colors=self.command_colors, backgrounds=self.command_backgrounds, thicknesses=self.command_thicknesses, texts=self.command_texts, count=self.command_count, capacity=self.command_capacity)
+            commands.push_outline_rect(x, y, width, height, self.theme_accent, 2)
+            self.command_count = commands.count
+        if over == 1 and mouse.left_released() == 1:
+            payload: i64 = self.text_edit_buf
+            self.drag_id = 0
+            self.text_edit_buf = 0
+            return payload
+        return 0

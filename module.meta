@@ -1,12 +1,14 @@
 # Eqoi Module Metadata
 # High-level native app framework for Dolet.
+# Owns the window + event pump; widgets on top of ui.
 
 [info]
 name = eqoi
-version = 0.3.0
-description = Native application framework for Dolet — widgets, theme, app loop. Pure-software renderer via ui + fonts.
+version = 0.4.0
+description = Native application framework for Dolet — window, widgets, theme, app loop, managed state, responsive panels, and advanced widgets (scrollbar, tabs, dropdown, modal, drag/drop).
 
 [dependencies]
+window = required
 ui = required
 input = required
 
@@ -14,7 +16,7 @@ input = required
 system_libs = user32, gdi32
 
 [link.linux]
-# Planned later through ui/window Linux backends.
+# Planned later.
 
 [link.macos]
 # Planned later.

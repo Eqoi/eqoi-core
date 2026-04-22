@@ -3,6 +3,7 @@
 # ============================
 # High-level native app framework built on top of ui.
 module eqoi
+import window
 import ui
 import input
 
