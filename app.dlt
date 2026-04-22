@@ -168,8 +168,8 @@ imple EqoiApp:
         self.theme_surface_active = ui_rgb(43, 59, 66)
         self.theme_text = ui_rgb(238, 244, 246)
         self.theme_muted_text = ui_rgb(155, 169, 175)
-        self.theme_accent = ui_rgb(48, 146, 240)
-        self.theme_accent_hover = ui_rgb(72, 166, 255)
+        self.theme_accent = ui_rgb(217, 119, 87)
+        self.theme_accent_hover = ui_rgb(229, 141, 110)
         self.theme_border = ui_rgb(83, 103, 112)
         self.theme_danger = ui_rgb(245, 91, 96)
         self.theme_spacing = 12
