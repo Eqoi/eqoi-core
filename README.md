@@ -69,6 +69,26 @@ else:
 - `dropdown_begin(x, y, w, h, selected_ptr, label) -> i32` / `dropdown_item(label) -> i32` / `dropdown_end()`
 - `drag_source(x, y, w, h, payload) -> i32` / `drop_target(x, y, w, h) -> i64`
 
+## Managed strings
+
+Prefer `a + b` or `a.concat(b)` when you need to build a string in a
+label or any transient UI code. Inside a bracketed scope (the `while`
+body, an `if` body, a function body that doesn't return `str`) the
+compiler dispatches both forms to an arena-backed builtin, so the
+intermediate result is freed automatically when the scope exits.
+
+```dolet
+# safe — freed on the next iteration pop
+app.label(48, 308, "level: " + Convert.i32_to_str(app.get_int(volume)))
+app.label(48, 320, "name: ".concat(name_str))
+```
+
+Never call `Str.concat()` from widget code. It is the static-method
+form on the `Str` struct and it always heap-allocates — the caller
+is responsible for `Memory.free`. Using it inside the frame loop
+produces a per-frame leak that grows forever (see the `simple-app-eqoi`
+and `FileManager` incidents).
+
 ## Managed state
 
 No manual `Memory.malloc` / `Memory.free` pairs in user code. Allocate
