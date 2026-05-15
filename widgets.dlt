@@ -2,7 +2,7 @@
 #  Eqoi Widgets
 # ============================
 
-imple EqoiApp:
+attach EqoiApp:
     fun push_commands(self, commands: UIDrawList):
         self.command_count = commands.count
 

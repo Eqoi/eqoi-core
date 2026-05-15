@@ -17,7 +17,7 @@ struct EqoiTheme:
     padding: i32 = 14
     border_width: i32 = 1
 
-imple EqoiTheme:
+attach EqoiTheme:
     static fun dark() -> EqoiTheme:
         return EqoiTheme(
             background=ui_rgb(12, 16, 18),

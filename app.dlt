@@ -120,7 +120,7 @@ struct EqoiApp:
     canvas_w: i32 = 0
     canvas_h: i32 = 0
 
-imple EqoiApp:
+attach EqoiApp:
     static fun create(title: str, width: i32, height: i32) -> EqoiApp:
         app: EqoiApp = EqoiApp()
         app.use_dark_theme()
