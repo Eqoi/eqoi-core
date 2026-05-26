@@ -125,17 +125,16 @@ attach EqoiApp:
         app: EqoiApp = EqoiApp()
         app.use_dark_theme()
 
-        win: Window = Window.create(title, width, height)
-        if win.get_handle() == 0:
+        if Window.open(title, width, height) == 0:
             return app
 
         commands: UIDrawList = ui_draw_list_create(256)
         if commands.is_valid() == 0:
-            win.destroy()
+            Window.shutdown()
             return app
 
-        app.window_handle = win.get_handle()
-        app.window_hinstance = win.get_hinstance()
+        app.window_handle = Window.handle()
+        app.window_hinstance = Window.hinstance()
         app.window_should_close = 0
         app.window_resized = 0
         app.window_focused = 1
@@ -207,18 +206,8 @@ attach EqoiApp:
         if commands.is_valid() == 1:
             commands.destroy()
 
-        win: Window = Window(
-            handle=self.window_handle,
-            hinstance=self.window_hinstance,
-            width=self.width,
-            height=self.height,
-            should_close_flag=self.window_should_close,
-            is_resized=self.window_resized,
-            is_focused=self.window_focused,
-            vulkan_surface=self.window_surface
-        )
-        if win.get_handle() != 0:
-            win.destroy()
+        if self.window_handle != 0:
+            Window.shutdown()
 
         self.window_handle = 0
         self.valid = 0
@@ -244,18 +233,8 @@ attach EqoiApp:
     fun should_close(self) -> i32:
         if self.valid == 0:
             return 1
-        win: Window = Window(
-            handle=self.window_handle,
-            hinstance=self.window_hinstance,
-            width=self.width,
-            height=self.height,
-            should_close_flag=self.window_should_close,
-            is_resized=self.window_resized,
-            is_focused=self.window_focused,
-            vulkan_surface=self.window_surface
-        )
-        result: i32 = win.should_close()
-        self.window_should_close = win.should_close_flag
+        result: i32 = Window.should_close()
+        self.window_should_close = result
         return result
 
     fun running(self) -> i32:
@@ -266,18 +245,10 @@ attach EqoiApp:
     fun begin(self) -> i32:
         if self.valid == 0:
             return 0
-        win: Window = Window(
-            handle=self.window_handle,
-            hinstance=self.window_hinstance,
-            width=self.width,
-            height=self.height,
-            should_close_flag=self.window_should_close,
-            is_resized=self.window_resized,
-            is_focused=self.window_focused,
-            vulkan_surface=self.window_surface
-        )
-        win.wait_events()
-        self.sync_window(win)
+        Window.wait()
+        self.sync_window()
+        if self.window_should_close == 1:
+            return 0
         self.update_mouse()
         self.begin_frame()
         return 1
@@ -285,18 +256,10 @@ attach EqoiApp:
     fun begin_poll(self) -> i32:
         if self.valid == 0:
             return 0
-        win: Window = Window(
-            handle=self.window_handle,
-            hinstance=self.window_hinstance,
-            width=self.width,
-            height=self.height,
-            should_close_flag=self.window_should_close,
-            is_resized=self.window_resized,
-            is_focused=self.window_focused,
-            vulkan_surface=self.window_surface
-        )
-        win.poll_events()
-        self.sync_window(win)
+        Window.poll()
+        self.sync_window()
+        if self.window_should_close == 1:
+            return 0
         self.update_mouse()
         self.begin_frame()
         return 1
@@ -304,18 +267,10 @@ attach EqoiApp:
     fun begin_timeout(self, timeout_ms: i32) -> i32:
         if self.valid == 0:
             return 0
-        win: Window = Window(
-            handle=self.window_handle,
-            hinstance=self.window_hinstance,
-            width=self.width,
-            height=self.height,
-            should_close_flag=self.window_should_close,
-            is_resized=self.window_resized,
-            is_focused=self.window_focused,
-            vulkan_surface=self.window_surface
-        )
-        win.wait_events_timeout(timeout_ms)
-        self.sync_window(win)
+        Window.wait_timeout(timeout_ms)
+        self.sync_window()
+        if self.window_should_close == 1:
+            return 0
         self.update_mouse()
         self.begin_frame()
         return 1
@@ -344,17 +299,21 @@ attach EqoiApp:
             commands.render(canvas)
             canvas.end()
 
-    fun sync_window(self, win: Window):
-        self.window_handle = win.handle
-        self.window_hinstance = win.hinstance
-        self.width = win.get_width()
-        self.height = win.get_height()
+    fun sync_window(self):
+        old_width: i32 = self.width
+        old_height: i32 = self.height
+        self.window_handle = Window.handle()
+        self.window_hinstance = Window.hinstance()
+        self.width = Window.width()
+        self.height = Window.height()
         self.canvas_w = self.width
         self.canvas_h = self.height
-        self.window_should_close = win.should_close_flag
-        self.window_resized = win.is_resized
-        self.window_focused = win.is_focused
-        self.window_surface = win.vulkan_surface
+        self.window_should_close = Window.should_close()
+        self.window_resized = 0
+        if self.width != old_width or self.height != old_height:
+            self.window_resized = 1
+        self.window_focused = Window.focused()
+        self.window_surface = 0
 
     fun update_mouse(self):
         mouse: UIMouseState = UIMouseState(
