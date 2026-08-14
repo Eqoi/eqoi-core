@@ -5,7 +5,7 @@ window and event loop, translates native input into `ui` snapshots, manages the
 software surface, and provides themes, layouts, widgets, clipping, and managed
 widget state.
 
-Current version: **0.5.0**
+Current version: **0.6.0**
 
 ```text
 Eqoi application
@@ -53,6 +53,17 @@ can be tested without opening a window.
 - checkboxes, toggles, sliders, progress bars, and text input
 - scrollbars and clipped scrollable regions
 - tabs, dropdowns, modals, tooltips, drag sources, and drop targets
+
+All widget text measurement comes from the active `ui` surface FontFace. Eqoi
+does not hard-code glyph dimensions, so centering, carets, tabs, dropdowns, and
+tooltips remain correct when the font face or pixel size changes. Coverage-font
+text and anti-aliased primitives are rasterized by `ui`; Eqoi stays focused on
+native application behavior and component composition.
+
+An application may create a face with the independent `fonts` package and pass
+it to `app.use_font(face)`. Eqoi borrows the atlas, so the application keeps the
+face alive and destroys it after `app.destroy()`; switching faces does not copy
+glyph pixels or add per-frame rasterization.
 
 `panel_begin/end` and scrollable regions use the dynamic nested clip stack from
 `ui`. Draw commands and command text grow safely instead of being silently

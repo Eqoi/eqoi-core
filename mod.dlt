@@ -6,6 +6,7 @@ module eqoi
 import window
 import ui
 import input
+import fonts
 
 type UIColor = i32
 

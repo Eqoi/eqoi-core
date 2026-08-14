@@ -1,3 +1,8 @@
 # Generated native showcase binaries.
 /examples/*.exe
 /examples/*-linux
+/tests/*.exe
+/tests/*.obj
+/tests/*.mlir
+/tests/*.ll
+/tests/*-linux

@@ -249,7 +249,7 @@ fun main() -> i32:
                 app.secondary_button(margin + 218, content_y + 318, 180, 42, "Secondary action")
                 app.panel_end()
 
-            app.muted_label(margin, screen_h - footer_h, "Resize the window and interact with every page | Eqoi 0.5.0")
+            app.muted_label(margin, screen_h - footer_h, "Resize the window and interact with every page | Eqoi 0.6.0")
 
             # Modal is recorded last so it is always above the page content.
             if app.get_bool(modal_open) == 1:
