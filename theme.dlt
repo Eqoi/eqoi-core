@@ -16,6 +16,7 @@ struct EqoiTheme:
     spacing: i32 = 12
     padding: i32 = 14
     border_width: i32 = 1
+    corner_radius: i32 = 6
 
 attach EqoiTheme:
     static fun dark() -> EqoiTheme:
@@ -32,8 +33,30 @@ attach EqoiTheme:
             danger=ui_rgb(245, 91, 96),
             spacing=12,
             padding=14,
-            border_width=1
+            border_width=1,
+            corner_radius=6
+        )
+
+    static fun light() -> EqoiTheme:
+        return EqoiTheme(
+            background=ui_rgb(242, 245, 247),
+            surface=ui_rgb(255, 255, 255),
+            surface_hover=ui_rgb(232, 238, 242),
+            surface_active=ui_rgb(218, 227, 232),
+            text=ui_rgb(24, 31, 35),
+            muted_text=ui_rgb(91, 106, 113),
+            accent=ui_rgb(190, 84, 54),
+            accent_hover=ui_rgb(213, 104, 72),
+            border=ui_rgb(177, 190, 197),
+            danger=ui_rgb(204, 48, 57),
+            spacing=12,
+            padding=14,
+            border_width=1,
+            corner_radius=6
         )
 
 fun eqoi_theme_dark() -> EqoiTheme:
     return EqoiTheme.dark()
+
+fun eqoi_theme_light() -> EqoiTheme:
+    return EqoiTheme.light()

@@ -4,8 +4,8 @@
 
 [info]
 name = eqoi
-version = 0.4.0
-description = Native application framework for Dolet — window, widgets, theme, app loop, managed state, responsive panels, and advanced widgets (scrollbar, tabs, dropdown, modal, drag/drop).
+version = 0.5.0
+description = Native application framework for Dolet — lifecycle, software surfaces, input snapshots, responsive layout, widgets, themes, managed state, and application services on top of ui.
 
 [dependencies]
 window = required
@@ -13,10 +13,10 @@ ui = required
 input = required
 
 [link.windows]
-system_libs = user32, gdi32
+# Native linking is inherited from window/input.
 
 [link.linux]
-# Planned later.
+# Native linking is inherited from window/input.
 
 [link.macos]
 # Planned later.

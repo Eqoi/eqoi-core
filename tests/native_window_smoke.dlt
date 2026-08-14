@@ -1,0 +1,22 @@
+import eqoi
+
+fun main() -> i32:
+    app: EqoiApp = EqoiApp.create("Eqoi native smoke", 320, 180)
+    if app.is_valid() == 0:
+        return 1
+
+    frame: i32 = 0
+    while frame < 30:
+        if app.begin_poll() == 0:
+            app.destroy()
+            return 2
+        app.panel(12, 12, 296, 156)
+        app.title(28, 34, "Eqoi")
+        app.label(28, 72, "Native surface presentation")
+        app.button(28, 108, 156, 36, "Ready")
+        app.end()
+        Time.sleep_ms(16)
+        frame = frame + 1
+
+    app.destroy()
+    return 0

@@ -1,0 +1,44 @@
+import eqoi
+
+fun main() -> i32:
+    column: EqoiLayout = EqoiLayout.column(10, 20, 300, 200, 12, 8)
+    first: UIRect = column.next(0, 30)
+    second: UIRect = column.next(120, 40)
+    fill: UIRect = column.next(0, 0)
+
+    if first.left != 22 or first.top != 32:
+        return 1
+    if first.right != 298 or first.bottom != 62:
+        return 2
+    if second.left != 22 or second.top != 70:
+        return 3
+    if fill.top != 118 or fill.bottom != 208:
+        return 4
+
+    row: EqoiLayout = EqoiLayout.row(0, 0, 200, 60, 10, 5)
+    left: UIRect = row.next(50, 0)
+    right: UIRect = row.next(0, 0)
+    if left.right != 60 or right.left != 65 or right.right != 190:
+        return 5
+
+    app: EqoiApp = EqoiApp()
+    app.set_theme(eqoi_theme_dark())
+    if app.theme.spacing != 12 or app.theme.corner_radius != 6:
+        return 6
+
+    light: EqoiTheme = eqoi_theme_light()
+    if light.text == light.background:
+        return 7
+
+    i: i32 = 0
+    while i < 300:
+        value: i64 = app.alloc_int(i)
+        if value == 0:
+            return 8
+        if app.get_int(value) != i:
+            return 9
+        i = i + 1
+    if app.state_count != 300 or app.state_capacity < 300:
+        return 10
+    app.destroy()
+    return 0

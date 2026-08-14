@@ -10,10 +10,15 @@ import input
 type UIColor = i32
 
 load eqoi/theme
+load eqoi/layout
 load eqoi/app
 load eqoi/widgets
 
 export EqoiTheme
+export EqoiLayout
 export EqoiApp
+export EQOI_LAYOUT_COLUMN
+export EQOI_LAYOUT_ROW
 export eqoi_theme_dark
+export eqoi_theme_light
 export eqoi_app_create

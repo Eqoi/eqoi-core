@@ -1,0 +1,103 @@
+# ============================
+#  Eqoi Layout
+# ============================
+# Small, deterministic layout primitives. Layout computes rectangles only;
+# it does not draw or depend on a native window backend.
+
+EQOI_LAYOUT_COLUMN: i32 = 1
+EQOI_LAYOUT_ROW:    i32 = 2
+
+@stack
+struct EqoiLayout:
+    x: i32 = 0
+    y: i32 = 0
+    width: i32 = 0
+    height: i32 = 0
+    padding: i32 = 0
+    gap: i32 = 0
+    direction: i32 = EQOI_LAYOUT_COLUMN
+    cursor_x: i32 = 0
+    cursor_y: i32 = 0
+
+attach EqoiLayout:
+    static fun column(x: i32, y: i32, width: i32, height: i32, padding: i32, gap: i32) -> EqoiLayout:
+        layout: EqoiLayout = EqoiLayout()
+        layout.init(x, y, width, height, padding, gap, EQOI_LAYOUT_COLUMN)
+        return layout
+
+    static fun row(x: i32, y: i32, width: i32, height: i32, padding: i32, gap: i32) -> EqoiLayout:
+        layout: EqoiLayout = EqoiLayout()
+        layout.init(x, y, width, height, padding, gap, EQOI_LAYOUT_ROW)
+        return layout
+
+    fun init(self, x: i32, y: i32, width: i32, height: i32, padding: i32, gap: i32, direction: i32):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.padding = padding
+        self.gap = gap
+        self.direction = direction
+        self.cursor_x = x + padding
+        self.cursor_y = y + padding
+
+    fun inner_width(self) -> i32:
+        value: i32 = self.width - self.padding * 2
+        if value < 0:
+            return 0
+        return value
+
+    fun inner_height(self) -> i32:
+        value: i32 = self.height - self.padding * 2
+        if value < 0:
+            return 0
+        return value
+
+    fun remaining_width(self) -> i32:
+        value: i32 = self.x + self.width - self.padding - self.cursor_x
+        if value < 0:
+            return 0
+        return value
+
+    fun remaining_height(self) -> i32:
+        value: i32 = self.y + self.height - self.padding - self.cursor_y
+        if value < 0:
+            return 0
+        return value
+
+    # A non-positive cross-axis size means "fill". A non-positive main-axis
+    # size means "consume the remaining area". Returned rectangles are always
+    # clamped to the layout bounds.
+    fun next(self, item_width: i32, item_height: i32) -> UIRect:
+        width: i32 = item_width
+        height: i32 = item_height
+
+        if self.direction == EQOI_LAYOUT_ROW:
+            available_width: i32 = self.remaining_width()
+            if width <= 0 or width > available_width:
+                width = available_width
+            if height <= 0:
+                height = self.inner_height()
+            if height > self.inner_height():
+                height = self.inner_height()
+
+            rect: UIRect = ui_make_rect(self.cursor_x, self.y + self.padding, width, height)
+            self.cursor_x = self.cursor_x + width + self.gap
+            return rect
+
+        available_height: i32 = self.remaining_height()
+        if height <= 0 or height > available_height:
+            height = available_height
+        if width <= 0:
+            width = self.inner_width()
+        if width > self.inner_width():
+            width = self.inner_width()
+
+        rect: UIRect = ui_make_rect(self.x + self.padding, self.cursor_y, width, height)
+        self.cursor_y = self.cursor_y + height + self.gap
+        return rect
+
+    fun reset(self):
+        self.cursor_x = self.x + self.padding
+        self.cursor_y = self.y + self.padding
+

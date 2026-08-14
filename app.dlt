@@ -19,70 +19,26 @@ struct EqoiApp:
     height: i32 = 0
     valid: i32 = 0
 
-    mouse_x: i32 = 0
-    mouse_y: i32 = 0
-    mouse_previous_x: i32 = 0
-    mouse_previous_y: i32 = 0
-    mouse_left_down: i32 = 0
-    mouse_right_down: i32 = 0
-    mouse_middle_down: i32 = 0
-    mouse_previous_left_down: i32 = 0
-    mouse_previous_right_down: i32 = 0
-    mouse_previous_middle_down: i32 = 0
-
-    command_kinds: i64 = 0
-    command_xs: i64 = 0
-    command_ys: i64 = 0
-    command_widths: i64 = 0
-    command_heights: i64 = 0
-    command_x2s: i64 = 0
-    command_y2s: i64 = 0
-    command_colors: i64 = 0
-    command_backgrounds: i64 = 0
-    command_thicknesses: i64 = 0
-    command_texts: i64 = 0
-    command_count: i32 = 0
-    command_capacity: i32 = 0
-
-    theme_background: UIColor = 0
-    theme_surface: UIColor = 0
-    theme_surface_hover: UIColor = 0
-    theme_surface_active: UIColor = 0
-    theme_text: UIColor = 0
-    theme_muted_text: UIColor = 0
-    theme_accent: UIColor = 0
-    theme_accent_hover: UIColor = 0
-    theme_border: UIColor = 0
-    theme_danger: UIColor = 0
-    theme_spacing: i32 = 12
-    theme_padding: i32 = 14
-    theme_border_width: i32 = 1
-    theme_border_radius: i32 = 0
+    surface: UISurface = UISurface()
+    commands: UIDrawList = UIDrawList()
+    input_state: UIInputState = UIInputState()
+    theme: EqoiTheme = EqoiTheme()
 
     # ---- Widget-identity tracking ----
     hover_id: i64 = 0
     focus_id: i64 = 0
     drag_id: i64 = 0
     hover_frames: i32 = 0
+    hover_seen: i32 = 0
     frame_counter: i32 = 0
 
-    # ---- text_input persistent buffers ----
-    text_edit_buf: i64 = 0
-    text_edit_len: i32 = 0
-    text_edit_caret: i32 = 0
+    # ---- Drag and drop ----
+    drag_payload: i64 = 0
 
     # ---- Managed state (alloc_bool/int/buf) ----
     state_ptrs: i64 = 0
     state_count: i32 = 0
     state_capacity: i32 = 256
-
-    # ---- Clip stack (panel_begin/end nesting) ----
-    clip_x:    i64 = 0
-    clip_y:    i64 = 0
-    clip_w:    i64 = 0
-    clip_h:    i64 = 0
-    clip_top:  i32 = 0
-    clip_capacity: i32 = 16
 
     # ---- Begin/end-style widget context ----
     # Tab bar
@@ -128,8 +84,14 @@ attach EqoiApp:
         if Window.open(title, width, height) == 0:
             return app
 
-        commands: UIDrawList = ui_draw_list_create(256)
+        commands: UIDrawList = ui_draw_list_create(1024)
         if commands.is_valid() == 0:
+            Window.shutdown()
+            return app
+
+        surface: UISurface = ui_surface_create(width, height)
+        if surface.is_valid() == 0:
+            commands.destroy()
             Window.shutdown()
             return app
 
@@ -144,67 +106,23 @@ attach EqoiApp:
         app.canvas_w = width
         app.canvas_h = height
         app.valid = 1
-
-        app.command_kinds = commands.kinds
-        app.command_xs = commands.xs
-        app.command_ys = commands.ys
-        app.command_widths = commands.widths
-        app.command_heights = commands.heights
-        app.command_x2s = commands.x2s
-        app.command_y2s = commands.y2s
-        app.command_colors = commands.colors
-        app.command_backgrounds = commands.backgrounds
-        app.command_thicknesses = commands.thicknesses
-        app.command_texts = commands.texts
-        app.command_count = commands.count
-        app.command_capacity = commands.capacity
+        app.commands = commands
+        app.surface = surface
+        app.input_state = ui_input_create()
         return app
 
     fun use_dark_theme(self):
-        self.theme_background = ui_rgb(12, 16, 18)
-        self.theme_surface = ui_rgb(24, 31, 35)
-        self.theme_surface_hover = ui_rgb(34, 46, 52)
-        self.theme_surface_active = ui_rgb(43, 59, 66)
-        self.theme_text = ui_rgb(238, 244, 246)
-        self.theme_muted_text = ui_rgb(155, 169, 175)
-        self.theme_accent = ui_rgb(217, 119, 87)
-        self.theme_accent_hover = ui_rgb(229, 141, 110)
-        self.theme_border = ui_rgb(83, 103, 112)
-        self.theme_danger = ui_rgb(245, 91, 96)
-        self.theme_spacing = 12
-        self.theme_padding = 14
-        self.theme_border_width = 1
-        self.theme_border_radius = 0
+        self.theme = EqoiTheme.dark()
+
+    fun use_light_theme(self):
+        self.theme = EqoiTheme.light()
 
     fun destroy(self):
         self._free_state()
-        if self.clip_x != 0:
-            Memory.free(self.clip_x)
-            Memory.free(self.clip_y)
-            Memory.free(self.clip_w)
-            Memory.free(self.clip_h)
-            self.clip_x = 0
-            self.clip_y = 0
-            self.clip_w = 0
-            self.clip_h = 0
-
-        commands: UIDrawList = UIDrawList(
-            kinds=self.command_kinds,
-            xs=self.command_xs,
-            ys=self.command_ys,
-            widths=self.command_widths,
-            heights=self.command_heights,
-            x2s=self.command_x2s,
-            y2s=self.command_y2s,
-            colors=self.command_colors,
-            backgrounds=self.command_backgrounds,
-            thicknesses=self.command_thicknesses,
-            texts=self.command_texts,
-            count=self.command_count,
-            capacity=self.command_capacity
-        )
-        if commands.is_valid() == 1:
-            commands.destroy()
+        if self.commands.is_valid() == 1:
+            self.commands.destroy()
+        if self.surface.is_valid() == 1:
+            self.surface.destroy()
 
         if self.window_handle != 0:
             Window.shutdown()
@@ -213,19 +131,6 @@ attach EqoiApp:
         self.valid = 0
         self.width = 0
         self.height = 0
-        self.command_kinds = 0
-        self.command_xs = 0
-        self.command_ys = 0
-        self.command_widths = 0
-        self.command_heights = 0
-        self.command_x2s = 0
-        self.command_y2s = 0
-        self.command_colors = 0
-        self.command_backgrounds = 0
-        self.command_thicknesses = 0
-        self.command_texts = 0
-        self.command_count = 0
-        self.command_capacity = 0
 
     fun is_valid(self) -> i32:
         return self.valid
@@ -278,26 +183,13 @@ attach EqoiApp:
     fun end(self):
         if self.valid == 0:
             return
-
-        commands: UIDrawList = UIDrawList(
-            kinds=self.command_kinds,
-            xs=self.command_xs,
-            ys=self.command_ys,
-            widths=self.command_widths,
-            heights=self.command_heights,
-            x2s=self.command_x2s,
-            y2s=self.command_y2s,
-            colors=self.command_colors,
-            backgrounds=self.command_backgrounds,
-            thicknesses=self.command_thicknesses,
-            texts=self.command_texts,
-            count=self.command_count,
-            capacity=self.command_capacity
-        )
-        canvas: DrawCanvas = draw_begin(self.window_handle, self.width, self.height)
+        if self.hover_seen == 0:
+            self.hover_id = 0
+            self.hover_frames = 0
+        canvas: DrawCanvas = self.surface.canvas()
         if canvas.is_valid() == 1:
-            commands.render(canvas)
-            canvas.end()
+            self.commands.render(canvas)
+            window_present_framebuffer(self.window_handle, self.surface.pixels, self.surface.width, self.surface.height, self.surface.pitch)
 
     fun sync_window(self):
         old_width: i32 = self.width
@@ -312,78 +204,48 @@ attach EqoiApp:
         self.window_resized = 0
         if self.width != old_width or self.height != old_height:
             self.window_resized = 1
+            if self.width > 0 and self.height > 0:
+                self.surface.resize(self.width, self.height)
         self.window_focused = Window.focused()
         self.window_surface = 0
 
     fun update_mouse(self):
-        mouse: UIMouseState = UIMouseState(
-            x=self.mouse_x,
-            y=self.mouse_y,
-            previous_x=self.mouse_previous_x,
-            previous_y=self.mouse_previous_y,
-            left_down=self.mouse_left_down,
-            right_down=self.mouse_right_down,
-            middle_down=self.mouse_middle_down,
-            previous_left_down=self.mouse_previous_left_down,
-            previous_right_down=self.mouse_previous_right_down,
-            previous_middle_down=self.mouse_previous_middle_down
-        )
-        mouse.update(self.window_handle)
-        self.mouse_x = mouse.x
-        self.mouse_y = mouse.y
-        self.mouse_previous_x = mouse.previous_x
-        self.mouse_previous_y = mouse.previous_y
-        self.mouse_left_down = mouse.left_down
-        self.mouse_right_down = mouse.right_down
-        self.mouse_middle_down = mouse.middle_down
-        self.mouse_previous_left_down = mouse.previous_left_down
-        self.mouse_previous_right_down = mouse.previous_right_down
-        self.mouse_previous_middle_down = mouse.previous_middle_down
-        # Also drive the input package so drag/wheel widgets work.
-        update_mouse()
-        # Forward window-owned events (wheel + typed chars + backspace)
-        # into input so scrollbar/text_input widgets can read them.
+        input_update()
         wheel: f32 = window_consume_wheel_delta()
-        if wheel != 0.0:
-            add_scroll(wheel)
         chars: str = window_consume_typed_chars()
-        cn: i32 = Memory.strlen(chars) as i32
-        ci: i32 = 0
-        cc: i8 = 0 as i8
-        while ci < cn:
-            cc = Memory.read_i8((chars as i64) + (ci as i64))
-            input_push_typed_char(cc as i32)
-            ci = ci + 1
-        if window_consume_backspace() == 1:
-            input_push_typed_char(8)
+        point: UIPoint = UIPoint()
+        window_client_mouse_position(self.window_handle, point as i64)
+        self.input_state.begin_frame(
+            point.x,
+            point.y,
+            mouse_pressed(MOUSE_LEFT),
+            mouse_pressed(MOUSE_RIGHT),
+            mouse_pressed(MOUSE_MIDDLE),
+            0.0,
+            wheel,
+            chars,
+            window_consume_backspace()
+        )
+        self.input_state.set_navigation(
+            key_just_pressed(46),
+            key_just_pressed(13),
+            key_just_pressed(9),
+            key_just_pressed(27),
+            shift_pressed(),
+            ctrl_pressed(),
+            alt_pressed()
+        )
 
     fun begin_frame(self):
-        commands: UIDrawList = UIDrawList(
-            kinds=self.command_kinds,
-            xs=self.command_xs,
-            ys=self.command_ys,
-            widths=self.command_widths,
-            heights=self.command_heights,
-            x2s=self.command_x2s,
-            y2s=self.command_y2s,
-            colors=self.command_colors,
-            backgrounds=self.command_backgrounds,
-            thicknesses=self.command_thicknesses,
-            texts=self.command_texts,
-            count=self.command_count,
-            capacity=self.command_capacity
-        )
-        commands.clear()
-        commands.push_clear(self.width, self.height, self.theme_background)
-        self.command_count = commands.count
+        self.commands.clear()
+        self.commands.push_clear(self.width, self.height, self.theme.background)
         self.frame_counter = self.frame_counter + 1
+        self.hover_seen = 0
         # Stale drag cleanup — if a drag ended and no drop_target claimed
         # the payload, reset so a new drag can start cleanly.
-        if self.drag_id != 0 and mouse_is_dragging(MOUSE_LEFT) == 0:
+        if self.drag_id != 0 and self.input_state.mouse.left_down == 0:
             self.drag_id = 0
-            self.text_edit_buf = self.frame_counter - self.frame_counter
-        # Clip stack resets to empty each frame.
-        self.clip_top = self.frame_counter - self.frame_counter
+            self.drag_payload = 0
         # Modal flag resets too — modal_begin/end are single-frame.
         self.md_active = self.frame_counter - self.frame_counter
 
@@ -402,11 +264,14 @@ attach EqoiApp:
         return h
 
     fun set_hover(self, id: i64):
+        if self.hover_seen == 1 and self.hover_id == id:
+            return
+        self.hover_seen = 1
         if self.hover_id == id:
             self.hover_frames = self.hover_frames + 1
         else:
             self.hover_id = id
-            self.hover_frames = 0
+            self.hover_frames = 1
 
     fun is_focused(self, id: i64) -> i32:
         if self.focus_id == id:
@@ -440,43 +305,51 @@ attach EqoiApp:
         return (rb & 255) | ((rg & 255) << 8) | ((rr & 255) << 16) | ((ra & 255) << 24)
 
     fun set_theme(self, theme: EqoiTheme):
-        self.theme_background = theme.background
-        self.theme_surface = theme.surface
-        self.theme_surface_hover = theme.surface_hover
-        self.theme_surface_active = theme.surface_active
-        self.theme_text = theme.text
-        self.theme_muted_text = theme.muted_text
-        self.theme_accent = theme.accent
-        self.theme_accent_hover = theme.accent_hover
-        self.theme_border = theme.border
-        self.theme_danger = theme.danger
-        self.theme_spacing = theme.spacing
-        self.theme_padding = theme.padding
-        self.theme_border_width = theme.border_width
+        self.theme = theme
 
     # ================================================================
     #  Managed state — hides Memory.malloc / Memory.free from user code
     # ================================================================
 
     fun _track(self, ptr: i64) -> i64:
+        if ptr == 0:
+            return 0
         if self.state_ptrs == 0:
             self.state_ptrs = Memory.malloc_zeroed((self.state_capacity as i64) * 8)
-        if self.state_count < self.state_capacity:
-            Memory.write_i64(self.state_ptrs + (self.state_count as i64) * 8, ptr)
-            self.state_count = self.state_count + 1
+            if self.state_ptrs == 0:
+                Memory.free(ptr)
+                return 0
+        if self.state_count >= self.state_capacity:
+            next_capacity: i32 = self.state_capacity * 2
+            if next_capacity < 16:
+                next_capacity = 16
+            next_ptrs: i64 = Memory.realloc(self.state_ptrs, (next_capacity as i64) * 8)
+            if next_ptrs == 0:
+                Memory.free(ptr)
+                return 0
+            self.state_ptrs = next_ptrs
+            self.state_capacity = next_capacity
+        Memory.write_i64(self.state_ptrs + (self.state_count as i64) * 8, ptr)
+        self.state_count = self.state_count + 1
         return ptr
 
     fun alloc_bool(self, initial: i32) -> i64:
         ptr: i64 = Memory.malloc_zeroed(4)
+        if ptr == 0:
+            return 0
         Memory.write_i32(ptr, initial)
         return self._track(ptr)
 
     fun alloc_int(self, initial: i32) -> i64:
         ptr: i64 = Memory.malloc_zeroed(4)
+        if ptr == 0:
+            return 0
         Memory.write_i32(ptr, initial)
         return self._track(ptr)
 
     fun alloc_buf(self, capacity: i32) -> i64:
+        if capacity < 0:
+            return 0
         ptr: i64 = Memory.malloc_zeroed((capacity as i64) + 1)
         return self._track(ptr)
 
@@ -510,97 +383,11 @@ attach EqoiApp:
     #  Clip stack — used by panel_begin/end and scrollable_begin/end
     # ================================================================
 
-    fun _clip_init(self):
-        if self.clip_x == 0:
-            self.clip_x = Memory.malloc_zeroed((self.clip_capacity as i64) * 4)
-            self.clip_y = Memory.malloc_zeroed((self.clip_capacity as i64) * 4)
-            self.clip_w = Memory.malloc_zeroed((self.clip_capacity as i64) * 4)
-            self.clip_h = Memory.malloc_zeroed((self.clip_capacity as i64) * 4)
-
     fun push_clip(self, x: i32, y: i32, width: i32, height: i32):
-        self._clip_init()
-        if self.clip_top >= self.clip_capacity:
-            return
-        nx: i32 = x
-        ny: i32 = y
-        nw: i32 = width
-        nh: i32 = height
-        if self.clip_top > 0:
-            off: i64 = ((self.clip_top - 1) as i64) * 4
-            px: i32 = Memory.read_i32(self.clip_x + off)
-            py: i32 = Memory.read_i32(self.clip_y + off)
-            pw: i32 = Memory.read_i32(self.clip_w + off)
-            ph: i32 = Memory.read_i32(self.clip_h + off)
-            if nx < px:
-                nx = px
-            if ny < py:
-                ny = py
-            right: i32 = x + width
-            pright: i32 = px + pw
-            if right > pright:
-                right = pright
-            bottom: i32 = y + height
-            pbottom: i32 = py + ph
-            if bottom > pbottom:
-                bottom = pbottom
-            nw = right - nx
-            nh = bottom - ny
-            if nw < 0:
-                nw = nx - nx
-            if nh < 0:
-                nh = ny - ny
-        off2: i64 = (self.clip_top as i64) * 4
-        Memory.write_i32(self.clip_x + off2, nx)
-        Memory.write_i32(self.clip_y + off2, ny)
-        Memory.write_i32(self.clip_w + off2, nw)
-        Memory.write_i32(self.clip_h + off2, nh)
-        self.clip_top = self.clip_top + 1
-        cmds: UIDrawList = UIDrawList(
-            kinds=self.command_kinds,
-            xs=self.command_xs,
-            ys=self.command_ys,
-            widths=self.command_widths,
-            heights=self.command_heights,
-            x2s=self.command_x2s,
-            y2s=self.command_y2s,
-            colors=self.command_colors,
-            backgrounds=self.command_backgrounds,
-            thicknesses=self.command_thicknesses,
-            texts=self.command_texts,
-            count=self.command_count,
-            capacity=self.command_capacity
-        )
-        cmds.push_clip(nx, ny, nw, nh)
-        self.command_count = cmds.count
+        self.commands.push_clip(x, y, width, height)
 
     fun pop_clip(self):
-        if self.clip_top <= 0:
-            return
-        self.clip_top = self.clip_top - 1
-        cmds: UIDrawList = UIDrawList(
-            kinds=self.command_kinds,
-            xs=self.command_xs,
-            ys=self.command_ys,
-            widths=self.command_widths,
-            heights=self.command_heights,
-            x2s=self.command_x2s,
-            y2s=self.command_y2s,
-            colors=self.command_colors,
-            backgrounds=self.command_backgrounds,
-            thicknesses=self.command_thicknesses,
-            texts=self.command_texts,
-            count=self.command_count,
-            capacity=self.command_capacity
-        )
-        cmds.pop_clip()
-        if self.clip_top > 0:
-            off: i64 = ((self.clip_top - 1) as i64) * 4
-            px: i32 = Memory.read_i32(self.clip_x + off)
-            py: i32 = Memory.read_i32(self.clip_y + off)
-            pw: i32 = Memory.read_i32(self.clip_w + off)
-            ph: i32 = Memory.read_i32(self.clip_h + off)
-            cmds.push_clip(px, py, pw, ph)
-        self.command_count = cmds.count
+        self.commands.pop_clip()
 
 fun eqoi_app_create(title: str, width: i32, height: i32) -> EqoiApp:
     return EqoiApp.create(title, width, height)
