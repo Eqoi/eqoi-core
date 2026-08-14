@@ -1,0 +1,270 @@
+import eqoi
+
+fun showcase_mode_label(mode: i32) -> str:
+    if mode == 1:
+        return "Performance"
+    if mode == 2:
+        return "Quality"
+    return "Balanced"
+
+fun showcase_copy_text(destination: i64, value: str):
+    length: i64 = Memory.strlen(value)
+    Memory.copy(destination, value as i64, length + 1)
+
+fun main() -> i32:
+    app: EqoiApp = EqoiApp.create("Eqoi Component Showcase", 1120, 720)
+    if app.is_valid() == 0:
+        return 1
+
+    active_tab: i64 = app.alloc_int(0)
+    light_theme: i64 = app.alloc_bool(0)
+    notifications: i64 = app.alloc_bool(1)
+    autosave: i64 = app.alloc_bool(1)
+    advanced: i64 = app.alloc_bool(0)
+    volume: i64 = app.alloc_int(72)
+    progress: i64 = app.alloc_int(64)
+    mode: i64 = app.alloc_int(0)
+    click_count: i64 = app.alloc_int(0)
+    list_scroll: i64 = app.alloc_int(0)
+    modal_open: i64 = app.alloc_bool(0)
+    drop_complete: i64 = app.alloc_bool(0)
+    profile_name: i64 = app.alloc_buf(47)
+
+    if active_tab == 0 or light_theme == 0 or notifications == 0 or autosave == 0:
+        app.destroy()
+        return 2
+    if advanced == 0 or volume == 0 or progress == 0 or mode == 0:
+        app.destroy()
+        return 3
+    if click_count == 0 or list_scroll == 0 or modal_open == 0 or drop_complete == 0 or profile_name == 0:
+        app.destroy()
+        return 4
+
+    showcase_copy_text(profile_name, "Dolet developer")
+
+    while app.running() == 1:
+        # A timed native wait keeps interactions/caret animation responsive
+        # without burning a CPU core when the application is idle.
+        if app.begin_timeout(16) == 1:
+            screen_w: i32 = app.width
+            screen_h: i32 = app.height
+            margin: i32 = 18
+            header_h: i32 = 58
+            tabs_h: i32 = 38
+            footer_h: i32 = 26
+            content_y: i32 = margin + header_h + tabs_h + 10
+            content_h: i32 = screen_h - content_y - footer_h - margin
+            content_w: i32 = screen_w - margin * 2
+            if content_w < 620:
+                content_w = 620
+            if content_h < 430:
+                content_h = 430
+
+            # Header and global theme switch.
+            app.panel(margin, margin, content_w, header_h)
+            app.title(margin + 18, margin + 14, "Eqoi Component Showcase")
+            app.muted_label(margin + 302, margin + 23, "Native UI rendered by pure Dolet")
+            if app.toggle(margin + content_w - 166, margin + 19, "Light", light_theme) == 1:
+                if app.get_bool(light_theme) == 1:
+                    app.use_light_theme()
+                else:
+                    app.use_dark_theme()
+
+            # Main navigation.
+            app.tab_bar_begin(margin, margin + header_h, content_w, tabs_h, active_tab)
+            app.tab_bar_item("Dashboard", 126)
+            app.tab_bar_item("Controls", 126)
+            app.tab_bar_item("Data", 126)
+            app.tab_bar_item("About", 126)
+            app.tab_bar_end()
+
+            tab: i32 = app.get_int(active_tab)
+
+            if tab == 0:
+                left_w: i32 = (content_w * 62) / 100
+                right_x: i32 = margin + left_w + 12
+                right_w: i32 = content_w - left_w - 12
+
+                app.panel_begin(margin, content_y, left_w, content_h)
+                app.title(margin + 22, content_y + 20, "Application overview")
+                app.muted_label(margin + 22, content_y + 56, "A live native dashboard exercising layout and retained state.")
+
+                card_y: i32 = content_y + 88
+                card_w: i32 = (left_w - 68) / 3
+                app.rect(margin + 22, card_y, card_w, 92, app.theme.surface_hover)
+                app.rect(margin + 34 + card_w, card_y, card_w, 92, app.theme.surface_hover)
+                app.rect(margin + 46 + card_w * 2, card_y, card_w, 92, app.theme.surface_hover)
+                app.label(margin + 36, card_y + 20, "Native")
+                app.muted_label(margin + 36, card_y + 48, "Window + input")
+                app.label(margin + 48 + card_w, card_y + 20, "Pure UI")
+                app.muted_label(margin + 48 + card_w, card_y + 48, "Software draw list")
+                app.label(margin + 60 + card_w * 2, card_y + 20, "Portable")
+                app.muted_label(margin + 60 + card_w * 2, card_y + 48, "Windows + Linux")
+
+                app.label(margin + 22, card_y + 126, "Project completion")
+                app.progress_bar(margin + 22, card_y + 150, left_w - 44, 18, app.get_int(progress))
+                app.muted_label(margin + 22, card_y + 180, "Move the slider on the Controls page to update this value.")
+
+                button_y: i32 = card_y + 226
+                if app.button(margin + 22, button_y, 158, 40, "Run action") == 1:
+                    count: i32 = app.get_int(click_count) + 1
+                    app.set_int(click_count, count)
+                if app.secondary_button(margin + 192, button_y, 128, 40, "Reset") == 1:
+                    app.set_int(click_count, 0)
+                    app.set_int(progress, 64)
+                app.label(margin + 22, button_y + 62, "Actions completed: " + Convert.i32_to_str(app.get_int(click_count)))
+                app.tooltip(app.widget_id(110, margin + 22, button_y), "This button updates managed state")
+                app.panel_end()
+
+                app.panel_begin(right_x, content_y, right_w, content_h)
+                app.title(right_x + 20, content_y + 20, "Runtime status")
+                app.rect(right_x + 20, content_y + 62, 10, 10, ui_rgb(70, 201, 126))
+                app.label(right_x + 40, content_y + 63, "Renderer online")
+                app.rect(right_x + 20, content_y + 92, 10, 10, ui_rgb(70, 201, 126))
+                app.label(right_x + 40, content_y + 93, "Input connected")
+                app.rect(right_x + 20, content_y + 122, 10, 10, ui_rgb(70, 201, 126))
+                app.label(right_x + 40, content_y + 123, "State registry healthy")
+                app.separator(right_x + 20, content_y + 158, right_w - 40)
+                app.label(right_x + 20, content_y + 182, "Quick settings")
+                app.checkbox(right_x + 20, content_y + 216, "Notifications", notifications)
+                app.toggle(right_x + 20, content_y + 250, "Autosave", autosave)
+                if app.button(right_x + 20, content_y + 298, right_w - 40, 40, "Open modal") == 1:
+                    app.set_bool(modal_open, 1)
+                app.panel_end()
+
+            elif tab == 1:
+                column_w: i32 = (content_w - 12) / 2
+                right_x2: i32 = margin + column_w + 12
+
+                app.panel_begin(margin, content_y, column_w, content_h)
+                app.title(margin + 22, content_y + 20, "Interactive controls")
+                app.checkbox(margin + 22, content_y + 64, "Enable notifications", notifications)
+                app.checkbox(margin + 22, content_y + 96, "Advanced options", advanced)
+                app.toggle(margin + 22, content_y + 132, "Automatic save", autosave)
+                app.label(margin + 22, content_y + 180, "Volume")
+                app.slider(margin + 22, content_y + 206, column_w - 44, 0, 100, volume)
+                app.muted_label(margin + 22, content_y + 238, "Value: " + Convert.i32_to_str(app.get_int(volume)))
+                app.label(margin + 22, content_y + 278, "Completion")
+                app.slider(margin + 22, content_y + 304, column_w - 44, 0, 100, progress)
+                app.progress_bar(margin + 22, content_y + 340, column_w - 44, 16, app.get_int(progress))
+                app.label(margin + 22, content_y + 382, "Profile name")
+                app.text_input(margin + 22, content_y + 406, column_w - 44, 38, profile_name, 47)
+                app.panel_end()
+
+                app.panel_begin(right_x2, content_y, column_w, content_h)
+                app.title(right_x2 + 22, content_y + 20, "Selection and drawing")
+                selected_label: str = showcase_mode_label(app.get_int(mode))
+                opened: i32 = app.dropdown_begin(right_x2 + 22, content_y + 64, 220, 36, mode, selected_label)
+                if opened == 1:
+                    app.dropdown_item("Balanced")
+                    app.dropdown_item("Performance")
+                    app.dropdown_item("Quality")
+                    app.dropdown_end()
+
+                app.label(right_x2 + 22, content_y + 224, "Drawing primitives")
+                app.rect(right_x2 + 22, content_y + 254, 64, 52, app.theme.accent)
+                app.outline(right_x2 + 98, content_y + 254, 64, 52, app.theme.accent)
+                primitives: UIDrawList = app.commands
+                primitives.push_fill_circle(right_x2 + 202, content_y + 280, 26, app.theme.accent_hover)
+                primitives.push_outline_circle(right_x2 + 274, content_y + 280, 26, app.theme.text, 2)
+                primitives.push_line(right_x2 + 320, content_y + 254, right_x2 + 382, content_y + 306, app.theme.danger, 3)
+                app.push_commands(primitives)
+                app.muted_label(right_x2 + 22, content_y + 326, "Fill, outline, circles, lines, text and clipping.")
+                app.panel_end()
+
+            elif tab == 2:
+                list_w: i32 = (content_w * 58) / 100
+                side_x: i32 = margin + list_w + 12
+                side_w: i32 = content_w - list_w - 12
+
+                app.title(margin + 20, content_y + 14, "Scrollable data region")
+                list_y: i32 = content_y + 48
+                list_h: i32 = content_h - 48
+                app.scrollable_begin(margin, list_y, list_w, list_h, list_scroll, 720)
+                offset: i32 = app.get_int(list_scroll)
+                row: i32 = 0
+                while row < 12:
+                    row_y: i32 = list_y + 14 + row * 56 - offset
+                    if (row & 1) == 0:
+                        app.rect(margin + 12, row_y, list_w - 40, 44, app.theme.surface_hover)
+                    else:
+                        app.rect(margin + 12, row_y, list_w - 40, 44, app.theme.surface_active)
+                    app.label(margin + 26, row_y + 18, "Native data row " + Convert.i32_to_str(row + 1))
+                    row = row + 1
+                app.scrollable_end()
+
+                app.panel_begin(side_x, content_y, side_w, content_h)
+                app.title(side_x + 20, content_y + 20, "Drag and drop")
+                app.muted_label(side_x + 20, content_y + 56, "Drag the source card into the target.")
+
+                source_x: i32 = side_x + 20
+                source_y: i32 = content_y + 92
+                dragging: i32 = app.drag_source(source_x, source_y, side_w - 40, 74, 2026 as i64)
+                source_color: UIColor = app.theme.surface_hover
+                if dragging == 1:
+                    source_color = app.theme.accent
+                app.rect(source_x, source_y, side_w - 40, 74, source_color)
+                app.outline(source_x, source_y, side_w - 40, 74, app.theme.border)
+                app.label(source_x + 18, source_y + 31, "Draggable payload")
+
+                target_y: i32 = content_y + 204
+                target_color: UIColor = app.theme.background
+                if app.get_bool(drop_complete) == 1:
+                    target_color = app.theme.surface_active
+                app.rect(source_x, target_y, side_w - 40, 112, target_color)
+                app.outline(source_x, target_y, side_w - 40, 112, app.theme.border)
+                app.label(source_x + 18, target_y + 47, "Drop target")
+                payload: i64 = app.drop_target(source_x, target_y, side_w - 40, 112)
+                if payload == 2026:
+                    app.set_bool(drop_complete, 1)
+                if app.get_bool(drop_complete) == 1:
+                    app.muted_label(source_x + 18, target_y + 72, "Payload accepted successfully")
+                if app.secondary_button(source_x, target_y + 140, 128, 38, "Clear") == 1:
+                    app.set_bool(drop_complete, 0)
+                app.panel_end()
+
+            else:
+                app.panel_begin(margin, content_y, content_w, content_h)
+                app.title(margin + 24, content_y + 22, "About this showcase")
+                app.label(margin + 24, content_y + 66, "Eqoi is the native application framework for Dolet.")
+                app.muted_label(margin + 24, content_y + 96, "This executable uses no browser, HTML, CSS, JavaScript or web view.")
+                app.muted_label(margin + 24, content_y + 120, "Eqoi owns lifecycle and widgets; UI owns pure software rendering.")
+                app.separator(margin + 24, content_y + 154, content_w - 48)
+
+                app.label(margin + 24, content_y + 184, "Theme palette")
+                swatch_w: i32 = 92
+                app.rect(margin + 24, content_y + 216, swatch_w, 58, app.theme.background)
+                app.rect(margin + 128, content_y + 216, swatch_w, 58, app.theme.surface)
+                app.rect(margin + 232, content_y + 216, swatch_w, 58, app.theme.surface_hover)
+                app.rect(margin + 336, content_y + 216, swatch_w, 58, app.theme.accent)
+                app.rect(margin + 440, content_y + 216, swatch_w, 58, app.theme.danger)
+                app.outline(margin + 24, content_y + 216, swatch_w, 58, app.theme.border)
+                app.outline(margin + 128, content_y + 216, swatch_w, 58, app.theme.border)
+                app.outline(margin + 232, content_y + 216, swatch_w, 58, app.theme.border)
+                app.outline(margin + 336, content_y + 216, swatch_w, 58, app.theme.border)
+                app.outline(margin + 440, content_y + 216, swatch_w, 58, app.theme.border)
+
+                if app.button(margin + 24, content_y + 318, 180, 42, "Show dialog") == 1:
+                    app.set_bool(modal_open, 1)
+                app.secondary_button(margin + 218, content_y + 318, 180, 42, "Secondary action")
+                app.panel_end()
+
+            app.muted_label(margin, screen_h - footer_h, "Resize the window and interact with every page | Eqoi 0.5.0")
+
+            # Modal is recorded last so it is always above the page content.
+            if app.get_bool(modal_open) == 1:
+                modal_w: i32 = 380
+                modal_h: i32 = 190
+                if app.modal_begin(modal_w, modal_h, "Eqoi modal dialog") == 1:
+                    modal_x: i32 = (app.canvas_w - modal_w) / 2
+                    modal_y: i32 = (app.canvas_h - modal_h) / 2
+                    app.label(modal_x + 24, modal_y + 58, "Modal layering and responsive centering work.")
+                    app.muted_label(modal_x + 24, modal_y + 86, "Resize the native window while this dialog is open.")
+                    if app.button(modal_x + modal_w - 126, modal_y + modal_h - 54, 102, 34, "Close") == 1:
+                        app.set_bool(modal_open, 0)
+                    app.modal_end()
+
+            app.end()
+
+    app.destroy()
+    return 0

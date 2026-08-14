@@ -79,3 +79,18 @@ Windows is verified natively. Linux/X11 uses the same Eqoi/UI layers, a cached
 `XImage` framebuffer path, X11 keyboard and pointer snapshots, and native text
 events. Linux is verified through a native WSLg/X11 integration smoke test in
 addition to cross-compilation; a desktop session needs `libX11` at runtime.
+
+## Component showcase
+
+`examples/showcase.dlt` is a complete native test application. It exercises
+responsive panels, tabs, both built-in themes, buttons, checkboxes, toggles,
+sliders, progress, text input, dropdowns, scrolling, drawing primitives,
+tooltips, drag and drop, modal layering, and application-managed state.
+
+```powershell
+doletc examples/showcase.dlt -o examples/eqoi-showcase.exe --target windows/x86_64 --no-console
+```
+
+```bash
+doletc examples/showcase.dlt -o examples/eqoi-showcase --target linux/x86_64
+```
