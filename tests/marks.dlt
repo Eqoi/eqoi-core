@@ -1,0 +1,119 @@
+import eqoi
+import fonts
+
+# Arabic diacritics. A mark sits on the letter before it: it takes no width
+# of its own and it is drawn back over that letter, not after it.
+#
+# The width half needs no Arabic font — a mark contributes nothing whether or
+# not the face can draw it. The placement half does, so it loads one from the
+# system and says plainly when it cannot.
+
+ARABIC_FONT: str = "C:/Windows/Fonts/arial.ttf"
+
+fun main() -> i32:
+    app: EqoiApp = EqoiApp.headless(400, 200)
+    if app.is_valid() == 0:
+        print("eqoi marks: headless app creation failed")
+        return 1
+
+    # ---------------------------------------------------------------
+    # A mark adds nothing to the width of the text it sits in.
+    # ---------------------------------------------------------------
+    plain: i32 = app.text_width("بب")
+    marked: i32 = app.text_width("بَب")
+    if plain <= 0:
+        print("eqoi marks: the plain text measured nothing")
+        app.destroy()
+        return 2
+    if marked != plain:
+        print("eqoi marks: a diacritic changed the width of the word")
+        app.destroy()
+        return 3
+
+    # Several marks change nothing either.
+    many: i32 = app.text_width("بَّب")
+    if many != plain:
+        print("eqoi marks: stacked diacritics changed the width")
+        app.destroy()
+        return 4
+
+    # And a mark on its own still occupies no width, so a stray one cannot
+    # push a line around.
+    if app.text_width("َ") != 0:
+        print("eqoi marks: a lone diacritic took width")
+        app.destroy()
+        return 5
+    app.destroy()
+
+    # ---------------------------------------------------------------
+    # Placement, which needs a face that has the glyphs.
+    # ---------------------------------------------------------------
+    b: EqoiApp = EqoiApp.headless(300, 120)
+    face: FontFace = font_face_load_ttf(ARABIC_FONT, 28)
+    if face.is_valid() == 0:
+        b.destroy()
+        print("eqoi marks: ok (width checks only; no Arabic face on this machine)")
+        return 0
+    b.use_font(face)
+
+    # Draw the letter alone, then the same letter with a fatha on it, and
+    # compare. The mark must add ink ABOVE the letter and nowhere to its
+    # right, which is what "sits on it" means in pixels.
+    b.inject_mouse_move(290, 110)
+    if b.begin_offscreen() == 1:
+        b.text(20, 20, "ب", b.theme.text)
+        b.end()
+    bare_top: i32 = 999
+    bare_right: i32 = 0
+    y: i32 = 0
+    x: i32 = 0
+    while y < 100:
+        x = 0
+        while x < 280:
+            if b.pixel_at(x, y) != b.theme.background:
+                if y < bare_top:
+                    bare_top = y
+                if x > bare_right:
+                    bare_right = x
+            x = x + 1
+        y = y + 1
+    if bare_right == 0:
+        b.destroy()
+        face.destroy()
+        print("eqoi marks: the bare letter drew nothing")
+        return 6
+
+    if b.begin_offscreen() == 1:
+        b.text(20, 20, "بَ", b.theme.text)
+        b.end()
+    marked_top: i32 = 999
+    marked_right: i32 = 0
+    y = 0
+    while y < 100:
+        x = 0
+        while x < 280:
+            if b.pixel_at(x, y) != b.theme.background:
+                if y < marked_top:
+                    marked_top = y
+                if x > marked_right:
+                    marked_right = x
+            x = x + 1
+        y = y + 1
+
+    # The mark reaches higher than the letter alone.
+    if marked_top >= bare_top:
+        print("eqoi marks: the diacritic did not appear above the letter")
+        b.destroy()
+        face.destroy()
+        return 7
+    # And it did not extend the word to the right, because it took no width.
+    if marked_right > bare_right + 2:
+        print("eqoi marks: the diacritic was drawn beside the letter, not on it")
+        b.destroy()
+        face.destroy()
+        return 8
+
+    b.destroy()
+    face.destroy()
+    print("eqoi marks: ok")
+    return 0

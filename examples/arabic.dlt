@@ -46,11 +46,11 @@ fun main() -> i32:
                 app.muted_label_in(lede, "لا شيء في هذا المثال يحضّر النص. التطبيق يكتب ما يقصده.")
             page.skip(6)
 
-            # Plain labels, including one that mixes scripts and numbers.
+            # Plain labels: one with full diacritics, one mixing scripts and numbers.
             l1: UIRect = page.next(0, 22)
             app.label_in(l1, "السلام عليكم ورحمة الله وبركاته")
             l2: UIRect = page.next(0, 22)
-            app.label_in(l2, "لا اله الا الله")
+            app.label_in(l2, "لَا إِلٰهَ إِلَّا اللَّه")
             l3: UIRect = page.next(0, 22)
             app.label_in(l3, "الإصدار 0.16 من مكتبة eqoi صدر سنة 2026")
             page.skip(8)

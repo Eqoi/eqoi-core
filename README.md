@@ -9,7 +9,7 @@ On Linux the public API is display-server neutral. The shared `window` adapter
 uses native Wayland/xdg-shell when available and falls back to X11/XWayland;
 Eqoi does not contain display-server-specific rendering or input code.
 
-Current version: **0.21.0**
+Current version: **0.22.0**
 
 ```text
 Eqoi application
