@@ -57,6 +57,8 @@ attach EqoiApp:
         self.push_commands(commands)
 
     fun button(self, x: i32, y: i32, width: i32, height: i32, label: str) -> i32:
+        id: i64 = self.widget_id(110, x, y)
+        focused: i32 = self.register_focusable(id)
         mouse: UIMouseState = self.input_state.mouse
         hovered: i32 = mouse.is_over_xy(x, y, width, height)
         fill: UIColor = self.theme.accent
@@ -72,17 +74,23 @@ attach EqoiApp:
         label_w: i32 = self.text_width(label)
         commands.push_text(x + (width - label_w) / 2, y + (height - self.text_height()) / 2, label, self.theme.text)
         self.push_commands(commands)
+        if focused == 1:
+            self.focus_ring(x, y, width, height)
 
         # Track hover for tooltip support.
-        id: i64 = self.widget_id(110, x, y)
         if hovered == 1:
             self.set_hover(id)
 
         if hovered == 1 and mouse.left_pressed() == 1:
+            self.focus_id = id
+            return 1
+        if self.is_activated(id) == 1:
             return 1
         return 0
 
     fun secondary_button(self, x: i32, y: i32, width: i32, height: i32, label: str) -> i32:
+        id: i64 = self.widget_id(111, x, y)
+        focused: i32 = self.register_focusable(id)
         mouse: UIMouseState = self.input_state.mouse
         hovered: i32 = mouse.is_over_xy(x, y, width, height)
         fill: UIColor = self.theme.surface
@@ -100,13 +108,17 @@ attach EqoiApp:
         label_w: i32 = self.text_width(label)
         commands.push_text(x + (width - label_w) / 2, y + (height - self.text_height()) / 2, label, self.theme.text)
         self.push_commands(commands)
+        if focused == 1:
+            self.focus_ring(x, y, width, height)
 
         # Track hover for tooltip support.
-        id: i64 = self.widget_id(111, x, y)
         if hovered == 1:
             self.set_hover(id)
 
         if hovered == 1 and mouse.left_pressed() == 1:
+            self.focus_id = id
+            return 1
+        if self.is_activated(id) == 1:
             return 1
         return 0
 
@@ -121,6 +133,7 @@ attach EqoiApp:
     fun checkbox(self, x: i32, y: i32, label: str, value_ptr: i64) -> i32:
         box: i32 = 16
         id: i64 = self.widget_id(100, x, y)
+        focused: i32 = self.register_focusable(id)
         mouse: UIMouseState = self.input_state.mouse
         hovered: i32 = mouse.is_over_xy(x, y, box, box)
         if hovered == 1:
@@ -151,8 +164,16 @@ attach EqoiApp:
         # Label to the right
         commands.push_text(x + box + 8, y + (box - self.text_height()) / 2, label, self.theme.text)
         self.push_commands(commands)
+        if focused == 1:
+            self.focus_ring(x, y, box, box)
 
+        activated: i32 = 0
         if hovered == 1 and mouse.left_pressed() == 1:
+            self.focus_id = id
+            activated = 1
+        if self.is_activated(id) == 1:
+            activated = 1
+        if activated == 1:
             if current == 0:
                 Memory.write_i32(value_ptr, 1)
             else:
@@ -167,6 +188,7 @@ attach EqoiApp:
         w: i32 = 40
         h: i32 = 20
         id: i64 = self.widget_id(101, x, y)
+        focused: i32 = self.register_focusable(id)
         mouse: UIMouseState = self.input_state.mouse
         hovered: i32 = mouse.is_over_xy(x, y, w, h)
         if hovered == 1:
@@ -194,8 +216,16 @@ attach EqoiApp:
         # Label to the right
         commands.push_text(x + w + 8, y + (h - self.text_height()) / 2, label, self.theme.text)
         self.push_commands(commands)
+        if focused == 1:
+            self.focus_ring(x, y, w, h)
 
+        activated: i32 = 0
         if hovered == 1 and mouse.left_pressed() == 1:
+            self.focus_id = id
+            activated = 1
+        if self.is_activated(id) == 1:
+            activated = 1
+        if activated == 1:
             if current == 0:
                 Memory.write_i32(value_ptr, 1)
             else:
@@ -211,6 +241,7 @@ attach EqoiApp:
     fun slider(self, x: i32, y: i32, width: i32, min_v: i32, max_v: i32, value_ptr: i64) -> i32:
         h: i32 = 20
         id: i64 = self.widget_id(102, x, y)
+        focused: i32 = self.register_focusable(id)
         mouse: UIMouseState = self.input_state.mouse
         hovered: i32 = mouse.is_over_xy(x, y, width, h)
         if hovered == 1:
@@ -225,8 +256,25 @@ attach EqoiApp:
         # If user pressed on the track, grab drag ownership
         if hovered == 1 and mouse.left_pressed() == 1:
             self.drag_id = id
+            self.focus_id = id
 
         changed: i32 = 0
+        # Left/right move the value in twentieths of the range, so a slider
+        # is usable without a pointer at any range size.
+        nudge: i32 = self.focus_step_x(id)
+        if nudge != 0:
+            increment: i32 = (max_v - min_v) / 20
+            if increment < 1:
+                increment = 1
+            key_v: i32 = v + nudge * increment
+            if key_v < min_v:
+                key_v = min_v
+            if key_v > max_v:
+                key_v = max_v
+            if key_v != v:
+                Memory.write_i32(value_ptr, key_v)
+                v = key_v
+                changed = 1
         # While we own the drag, recompute value from current mouse x
         if self.drag_id == id and self.input_state.mouse.left_down == 1:
             rel: i32 = self.input_state.mouse.x - x
@@ -264,6 +312,8 @@ attach EqoiApp:
             knob_color = self.theme.accent_hover
         commands.push_fill_circle(knob_x, y + h / 2, knob_r, knob_color)
         self.push_commands(commands)
+        if focused == 1:
+            self.focus_ring(x, y, width, h)
         return changed
 
     # ---------------------------------------------------------------
@@ -312,6 +362,9 @@ attach EqoiApp:
     # ---------------------------------------------------------------
     fun text_input(self, x: i32, y: i32, width: i32, height: i32, buf: i64, max_len: i32) -> i32:
         id: i64 = self.widget_id(104, x, y)
+        # Registered before the click handler so a click can still override
+        # whatever Tab decided this frame.
+        self.register_focusable(id)
         mouse: UIMouseState = self.input_state.mouse
         hovered: i32 = mouse.is_over_xy(x, y, width, height)
         if hovered == 1:
@@ -418,7 +471,14 @@ attach EqoiApp:
     # scroll_ptr stores an i32 pixel offset in [0 .. content_h - view_h].
     # Returns 1 on scroll change, else 0.
     # ---------------------------------------------------------------
+    # A standalone scrollbar only takes the wheel over its own track.
     fun scrollbar_vertical(self, x: i32, y: i32, height: i32, view_h: i32, content_h: i32, scroll_ptr: i64) -> i32:
+        return self.scrollbar_vertical_area(x, y, height, view_h, content_h, scroll_ptr, x, y, 12, height)
+
+    # Same scrollbar, with the wheel-sensitive rectangle given explicitly.
+    # A scrollable region passes its whole area, because a wheel over the
+    # content is what a reader actually does; aiming at a 12px column is not.
+    fun scrollbar_vertical_area(self, x: i32, y: i32, height: i32, view_h: i32, content_h: i32, scroll_ptr: i64, wheel_x: i32, wheel_y: i32, wheel_w: i32, wheel_h: i32) -> i32:
         w: i32 = 12
         id: i64 = self.widget_id(120, x, y)
         mouse: UIMouseState = self.input_state.mouse
@@ -463,8 +523,8 @@ attach EqoiApp:
                     scroll = new_scroll
                     changed = 1
 
-        # Mouse wheel scroll when track is hovered
-        if hovered_track == 1:
+        # Mouse wheel over the wheel-sensitive area, not just the track.
+        if mouse.is_over_xy(wheel_x, wheel_y, wheel_w, wheel_h) == 1:
             wheel: f32 = self.input_state.mouse.wheel_y
             if wheel != 0.0:
                 new_scroll: i32 = scroll - ((wheel * 40.0) as i32)
@@ -512,7 +572,7 @@ attach EqoiApp:
 
     fun scrollable_end(self):
         self.pop_clip()
-        self.scrollbar_vertical(self.sr_x + self.sr_w - 12, self.sr_y, self.sr_h, self.sr_h, self.sr_content_h, self.sr_scroll_ptr)
+        self.scrollbar_vertical_area(self.sr_x + self.sr_w - 12, self.sr_y, self.sr_h, self.sr_h, self.sr_content_h, self.sr_scroll_ptr, self.sr_x, self.sr_y, self.sr_w, self.sr_h)
 
     # ---------------------------------------------------------------
     # Tab bar — begin/item/end. Items rendered left-to-right with the
@@ -527,6 +587,7 @@ attach EqoiApp:
         self.tab_cursor_x = x
         self.tab_active_ptr = active_ptr
         self.tab_changed = 0
+        self.tab_scope = self.widget_id(131, x, y)
         commands: UIDrawList = self.commands
         commands.push_fill_rect(x, y, width, height, self.theme.background)
         commands.push_line(x, y + height - 1, x + width, y + height - 1, self.theme.border, 1)
@@ -538,7 +599,14 @@ attach EqoiApp:
         if active == self.tab_idx:
             is_active = 1
 
+        # Keyed by the bar plus this item's index, so a tab keeps its identity
+        # when the bar moves or the item widths change.
+        self.push_id(self.tab_scope)
+        self.push_id_int(self.tab_idx)
         id: i64 = self.widget_id(130, self.tab_cursor_x, self.tab_y)
+        self.pop_id()
+        self.pop_id()
+        focused: i32 = self.register_focusable(id)
         mouse: UIMouseState = self.input_state.mouse
         hovered: i32 = mouse.is_over_xy(self.tab_cursor_x, self.tab_y, item_width, self.tab_h)
         if hovered == 1:
@@ -553,9 +621,17 @@ attach EqoiApp:
         if is_active == 1:
             commands.push_fill_rect(self.tab_cursor_x, self.tab_y + self.tab_h - 3, item_width, 3, self.theme.accent)
         self.push_commands(commands)
+        if focused == 1:
+            self.focus_ring(self.tab_cursor_x, self.tab_y, item_width, self.tab_h)
 
         changed: i32 = 0
-        if hovered == 1 and mouse.left_pressed() == 1 and is_active == 0:
+        picked: i32 = 0
+        if hovered == 1 and mouse.left_pressed() == 1:
+            self.focus_id = id
+            picked = 1
+        if self.is_activated(id) == 1:
+            picked = 1
+        if picked == 1 and is_active == 0:
             Memory.write_i32(self.tab_active_ptr, self.tab_idx)
             self.tab_changed = 1
             changed = 1
@@ -574,6 +650,7 @@ attach EqoiApp:
     # ---------------------------------------------------------------
     fun dropdown_begin(self, x: i32, y: i32, width: i32, height: i32, selected_ptr: i64, selected_label: str) -> i32:
         id: i64 = self.widget_id(140, x, y)
+        focused: i32 = self.register_focusable(id)
         self.dd_x = x
         self.dd_y = y
         self.dd_w = width
@@ -587,17 +664,28 @@ attach EqoiApp:
         if hovered == 1:
             self.set_hover(id)
 
+        # Open state lives in its own slot, so a text input elsewhere can hold
+        # keyboard focus while this dropdown is open.
         is_open: i32 = 0
-        if self.focus_id == id:
+        if self.dd_open_id == id:
             is_open = 1
 
+        toggled: i32 = 0
         if hovered == 1 and mouse.left_pressed() == 1:
+            self.focus_id = id
+            toggled = 1
+        if self.is_activated(id) == 1:
+            toggled = 1
+        if toggled == 1:
             if is_open == 1:
-                self.focus_id = 0
+                self.dd_open_id = 0
                 is_open = 0
             else:
-                self.focus_id = id
+                self.dd_open_id = id
                 is_open = 1
+        if is_open == 1 and self.escape_pressed() == 1:
+            self.dd_open_id = 0
+            is_open = 0
 
         commands: UIDrawList = self.commands
         fill: UIColor = self.theme.surface
@@ -611,11 +699,19 @@ attach EqoiApp:
         commands.push_line(chev_cx - 4, chev_cy - 2, chev_cx,     chev_cy + 2, self.theme.muted_text, 1)
         commands.push_line(chev_cx,     chev_cy + 2, chev_cx + 4, chev_cy - 2, self.theme.muted_text, 1)
         self.push_commands(commands)
+        if focused == 1:
+            self.focus_ring(x, y, width, height)
         return is_open
 
     fun dropdown_item(self, label: str) -> i32:
         item_y: i32 = self.dd_y + self.dd_h + self.dd_item_idx * self.dd_h
+        # Keyed by the dropdown plus this item's index rather than by the row
+        # position, which moves whenever the dropdown does.
+        self.push_id(self.dd_id)
+        self.push_id_int(self.dd_item_idx)
         id: i64 = self.widget_id(141, self.dd_x, item_y)
+        self.pop_id()
+        self.pop_id()
         mouse: UIMouseState = self.input_state.mouse
         hovered: i32 = mouse.is_over_xy(self.dd_x, item_y, self.dd_w, self.dd_h)
         if hovered == 1:
@@ -638,7 +734,7 @@ attach EqoiApp:
         picked: i32 = 0
         if hovered == 1 and mouse.left_pressed() == 1:
             Memory.write_i32(self.dd_selected_ptr, self.dd_item_idx)
-            self.focus_id = 0
+            self.dd_open_id = 0
             picked = 1
 
         self.dd_item_idx = self.dd_item_idx + 1

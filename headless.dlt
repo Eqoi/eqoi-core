@@ -50,6 +50,12 @@ attach EqoiApp:
             self.in_ctrl,
             self.in_alt
         )
+        self.input_state.set_arrows(
+            self.in_arrow_left,
+            self.in_arrow_right,
+            self.in_arrow_up,
+            self.in_arrow_down
+        )
         # Drain the one-shot events. Held state (buttons, modifiers) survives.
         self.in_wheel = 0.0
         self.in_chars = ""
@@ -58,6 +64,10 @@ attach EqoiApp:
         self.in_enter = 0
         self.in_tab = 0
         self.in_escape = 0
+        self.in_arrow_left = 0
+        self.in_arrow_right = 0
+        self.in_arrow_up = 0
+        self.in_arrow_down = 0
 
     # ---------------------------------------------------------------
     # Pointer
@@ -108,6 +118,18 @@ attach EqoiApp:
 
     fun inject_escape(self):
         self.in_escape = 1
+
+    fun inject_arrow_left(self):
+        self.in_arrow_left = 1
+
+    fun inject_arrow_right(self):
+        self.in_arrow_right = 1
+
+    fun inject_arrow_up(self):
+        self.in_arrow_up = 1
+
+    fun inject_arrow_down(self):
+        self.in_arrow_down = 1
 
     fun inject_modifiers(self, shift: i32, ctrl: i32, alt: i32):
         self.in_shift = shift

@@ -1,0 +1,142 @@
+# ============================
+#  Eqoi Keyboard Focus
+# ============================
+# Tab order in an immediate-mode frame is the order widgets are drawn in.
+# There is no retained tree to walk, so the order is rebuilt every frame: each
+# focusable widget calls register_focusable, and the traversal state machine
+# decides, in one pass, which identity holds focus.
+#
+# Moving forward, the widget registered immediately after the focused one
+# takes focus. Moving backward, the one registered immediately before it does.
+# If the focused widget is last (or first), end() wraps to the other end. If
+# the focused widget did not appear at all this frame — a tab switched, a
+# panel collapsed — focus falls to the first focusable rather than vanishing.
+#
+# Widgets report focus themselves rather than being told, because a widget
+# that is never drawn must not be reachable by Tab.
+
+attach EqoiApp:
+    fun begin_focus_frame(self):
+        self.focus_move = 0
+        if self.input_state.tab_pressed == 1:
+            if self.input_state.shift_down == 1:
+                self.focus_move = -1
+            else:
+                self.focus_move = 1
+        self.focus_take_next = 0
+        self.focus_wrap_to_last = 0
+        self.focus_first = 0
+        self.focus_last = 0
+        self.focus_prev = 0
+        self.focus_seen = 0
+        self.focus_found = 0
+
+    # Enter this widget into the frame's tab order. Returns 1 if it holds
+    # keyboard focus once this call has been accounted for.
+    fun register_focusable(self, id: i64) -> i32:
+        if id == 0:
+            return 0
+        if self.focus_first == 0:
+            self.focus_first = id
+        self.focus_seen = 1
+
+        if self.focus_take_next == 1:
+            self.focus_id = id
+            self.focus_take_next = 0
+            self.focus_move = 0
+        elif self.focus_move == 1 and self.focus_id == id:
+            self.focus_take_next = 1
+        elif self.focus_move == -1 and self.focus_id == id:
+            if self.focus_prev == 0:
+                # Focused widget is first in the frame; wrap in resolve.
+                self.focus_wrap_to_last = 1
+            else:
+                self.focus_id = self.focus_prev
+                self.focus_move = 0
+
+        self.focus_prev = id
+        self.focus_last = id
+
+        if self.focus_id == id:
+            self.focus_found = 1
+            return 1
+        return 0
+
+    fun resolve_focus_move(self):
+        if self.focus_seen == 0:
+            # Nothing focusable was drawn. Leave focus untouched so it
+            # survives a frame that only paints, and clear the pending move.
+            self.focus_move = 0
+            self.focus_take_next = 0
+            self.focus_wrap_to_last = 0
+            return
+
+        # Tab pressed with nothing focused, or with focus on a widget that is
+        # no longer being drawn: enter at the near end.
+        if self.focus_move != 0 and self.focus_found == 0:
+            if self.focus_move == 1:
+                self.focus_id = self.focus_first
+            else:
+                self.focus_id = self.focus_last
+            self.focus_move = 0
+            self.focus_take_next = 0
+            self.focus_wrap_to_last = 0
+            return
+
+        if self.focus_take_next == 1:
+            self.focus_id = self.focus_first
+            self.focus_take_next = 0
+        if self.focus_wrap_to_last == 1:
+            self.focus_id = self.focus_last
+            self.focus_wrap_to_last = 0
+        self.focus_move = 0
+
+    # ---------------------------------------------------------------
+    # Activation
+    # ---------------------------------------------------------------
+    # Enter fires the focused widget. Space is deliberately not wired: it
+    # also arrives as a typed character, and until text input owns a caret
+    # there is no unambiguous way to tell a press from a typed space.
+    fun is_activated(self, id: i64) -> i32:
+        if self.focus_id != id:
+            return 0
+        return self.input_state.enter_pressed
+
+    fun escape_pressed(self) -> i32:
+        return self.input_state.escape_pressed
+
+    # Signed step from the arrow keys, for widgets whose value moves within
+    # themselves rather than moving focus between widgets.
+    fun focus_step_x(self, id: i64) -> i32:
+        if self.focus_id != id:
+            return 0
+        nudge: i32 = 0
+        if self.input_state.left_pressed == 1:
+            nudge = nudge - 1
+        if self.input_state.right_pressed == 1:
+            nudge = nudge + 1
+        return nudge
+
+    fun focus_step_y(self, id: i64) -> i32:
+        if self.focus_id != id:
+            return 0
+        nudge: i32 = 0
+        if self.input_state.up_pressed == 1:
+            nudge = nudge - 1
+        if self.input_state.down_pressed == 1:
+            nudge = nudge + 1
+        return nudge
+
+    # ---------------------------------------------------------------
+    # Focus ring
+    # ---------------------------------------------------------------
+    # Keyboard focus nobody can see is not keyboard support. Drawn outside
+    # the widget so it never covers content.
+    fun focus_ring(self, x: i32, y: i32, width: i32, height: i32):
+        r: i32 = self.theme.corner_radius
+        commands: UIDrawList = self.commands
+        if r > 0:
+            commands.push_outline_rounded_rect(x - 2, y - 2, width + 4, height + 4, r + 2, self.theme.accent_hover, 2)
+        else:
+            commands.push_outline_rect(x - 2, y - 2, width + 4, height + 4, self.theme.accent_hover, 2)
+        self.push_commands(commands)

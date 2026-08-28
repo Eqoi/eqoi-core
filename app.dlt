@@ -37,6 +37,18 @@ struct EqoiApp:
     id_depth: i32 = 0
     id_capacity: i32 = 0
 
+    # ---- Keyboard focus traversal (see focus.dlt) ----
+    # Rebuilt every frame from the order widgets register themselves in, so
+    # Tab order follows the order the application draws in.
+    focus_move: i32 = 0
+    focus_take_next: i32 = 0
+    focus_wrap_to_last: i32 = 0
+    focus_first: i64 = 0
+    focus_last: i64 = 0
+    focus_prev: i64 = 0
+    focus_seen: i32 = 0
+    focus_found: i32 = 0
+
     # ---- Drag and drop ----
     drag_payload: i64 = 0
 
@@ -54,6 +66,9 @@ struct EqoiApp:
     tab_cursor_x: i32 = 0
     tab_active_ptr: i64 = 0
     tab_changed: i32 = 0
+    # Identity of the bar itself, so items are keyed by index rather than by
+    # the running cursor position.
+    tab_scope: i64 = 0
 
     # Scrollable region
     sr_x: i32 = 0
@@ -71,6 +86,9 @@ struct EqoiApp:
     dd_selected_ptr: i64 = 0
     dd_item_idx: i32 = 0
     dd_id: i64 = 0
+    # Which dropdown is open. Kept apart from focus_id so a text input can
+    # hold keyboard focus while a dropdown is open.
+    dd_open_id: i64 = 0
 
     # Modal
     md_active: i32 = 0
@@ -101,6 +119,10 @@ struct EqoiApp:
     in_shift: i32 = 0
     in_ctrl: i32 = 0
     in_alt: i32 = 0
+    in_arrow_left: i32 = 0
+    in_arrow_right: i32 = 0
+    in_arrow_up: i32 = 0
+    in_arrow_down: i32 = 0
 
 attach EqoiApp:
     static fun create(title: str, width: i32, height: i32) -> EqoiApp:
@@ -258,6 +280,7 @@ attach EqoiApp:
         if self.hover_seen == 0:
             self.hover_id = 0
             self.hover_frames = 0
+        self.resolve_focus_move()
         canvas: DrawCanvas = self.surface.canvas()
         if canvas.is_valid() == 1:
             self.commands.render(canvas)
@@ -308,12 +331,19 @@ attach EqoiApp:
             ctrl_pressed(),
             alt_pressed()
         )
+        self.input_state.set_arrows(
+            key_just_pressed(KEY_LEFT),
+            key_just_pressed(KEY_RIGHT),
+            key_just_pressed(KEY_UP),
+            key_just_pressed(KEY_DOWN)
+        )
 
     fun begin_frame(self):
         self.commands.clear()
         self.commands.push_clear(self.width, self.height, self.theme.background)
         self.frame_counter = self.frame_counter + 1
         self.hover_seen = 0
+        self.begin_focus_frame()
         # Stale drag cleanup — if a drag ended and no drop_target claimed
         # the payload, reset so a new drag can start cleanly.
         if self.drag_id != 0 and self.input_state.mouse.left_down == 0:

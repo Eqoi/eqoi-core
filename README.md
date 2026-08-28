@@ -9,7 +9,7 @@ On Linux the public API is display-server neutral. The shared `window` adapter
 uses native Wayland/xdg-shell when available and falls back to X11/XWayland;
 Eqoi does not contain display-server-specific rendering or input code.
 
-Current version: **0.9.0**
+Current version: **0.10.0**
 
 ```text
 Eqoi application
@@ -170,6 +170,36 @@ is empty; `clear_id_stack()` drops every scope, which is worth calling between
 top-level sections if a frame can leave a nested block early.
 
 Callers that push nothing behave exactly as they did before `push_id` existed.
+
+## Keyboard
+
+Tab order is the order widgets are drawn in. There is no retained tree to walk,
+so it is rebuilt every frame: each focusable widget enters itself into the
+order, and the traversal settles in one pass.
+
+- **Tab** / **Shift+Tab** move focus forward and backward, wrapping at both
+  ends. With nothing focused, Tab enters at the first widget.
+- **Enter** fires the focused widget: a button returns 1, a checkbox or toggle
+  flips, a tab or dropdown opens.
+- **Escape** closes an open dropdown.
+- **Left/Right** move a focused slider by a twentieth of its range, so a slider
+  is usable without a pointer at any range size.
+- A focus ring is drawn outside the focused widget, because keyboard focus
+  nobody can see is not keyboard support.
+
+If the focused widget stops being drawn — a tab switched, a panel collapsed —
+focus falls to the first focusable rather than vanishing.
+
+Space is deliberately not an activation key yet: it also arrives as a typed
+character, and until text input owns a caret there is no unambiguous way to
+tell a press from a typed space. Delete waits on the same work.
+
+## Scrolling
+
+`scrollable_begin`/`scrollable_end` take the wheel anywhere over the region,
+not only over the scrollbar column. A standalone `scrollbar_vertical` still
+takes the wheel over its own track; `scrollbar_vertical_area` accepts the
+wheel-sensitive rectangle explicitly.
 
 ## Boundaries
 

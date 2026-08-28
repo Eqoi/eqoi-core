@@ -1,0 +1,316 @@
+import eqoi
+
+# Keyboard and wheel behaviour. Every check drives real keys through the real
+# frame loop; none of it touches a mouse unless the check is about one.
+
+# Three buttons in a column. Returns which one fired this frame, 0 for none.
+fun draw_buttons(app: EqoiApp) -> i32:
+    fired: i32 = 0
+    if app.button(10, 10, 120, 32, "One") == 1:
+        fired = 1
+    if app.button(10, 60, 120, 32, "Two") == 1:
+        fired = 2
+    if app.button(10, 110, 120, 32, "Three") == 1:
+        fired = 3
+    return fired
+
+fun main() -> i32:
+    app: EqoiApp = EqoiApp.headless(400, 300)
+    if app.is_valid() == 0:
+        print("eqoi keyboard: headless app creation failed")
+        return 1
+
+    one: i64 = app.widget_id(110, 10, 10)
+    two: i64 = app.widget_id(110, 10, 60)
+    three: i64 = app.widget_id(110, 10, 110)
+
+    # Keep the pointer clear of every widget so nothing here is mouse-driven.
+    app.inject_mouse_move(350, 280)
+
+    # ---------------------------------------------------------------
+    # Tab order follows draw order, and wraps at both ends.
+    # ---------------------------------------------------------------
+    if app.begin_offscreen() == 1:
+        draw_buttons(app)
+        app.end()
+    if app.focus_id != 0:
+        print("eqoi keyboard: something took focus without being asked")
+        app.destroy()
+        return 2
+
+    app.inject_tab()
+    if app.begin_offscreen() == 1:
+        draw_buttons(app)
+        app.end()
+    if app.focus_id != one:
+        print("eqoi keyboard: Tab with nothing focused did not enter at the first widget")
+        app.destroy()
+        return 3
+
+    app.inject_tab()
+    if app.begin_offscreen() == 1:
+        draw_buttons(app)
+        app.end()
+    if app.focus_id != two:
+        print("eqoi keyboard: Tab did not advance to the next widget")
+        app.destroy()
+        return 4
+
+    app.inject_tab()
+    if app.begin_offscreen() == 1:
+        draw_buttons(app)
+        app.end()
+    app.inject_tab()
+    if app.begin_offscreen() == 1:
+        draw_buttons(app)
+        app.end()
+    if app.focus_id != one:
+        print("eqoi keyboard: Tab did not wrap from the last widget to the first")
+        app.destroy()
+        return 5
+
+    # Shift+Tab from the first widget wraps to the last.
+    app.inject_modifiers(1, 0, 0)
+    app.inject_tab()
+    if app.begin_offscreen() == 1:
+        draw_buttons(app)
+        app.end()
+    if app.focus_id != three:
+        print("eqoi keyboard: Shift+Tab did not wrap backward to the last widget")
+        app.destroy()
+        return 6
+
+    app.inject_tab()
+    if app.begin_offscreen() == 1:
+        draw_buttons(app)
+        app.end()
+    if app.focus_id != two:
+        print("eqoi keyboard: Shift+Tab did not step backward")
+        app.destroy()
+        return 7
+    app.inject_modifiers(0, 0, 0)
+
+    # ---------------------------------------------------------------
+    # Enter fires the focused widget, and only that one.
+    # ---------------------------------------------------------------
+    app.inject_enter()
+    fired: i32 = 0
+    if app.begin_offscreen() == 1:
+        fired = draw_buttons(app)
+        app.end()
+    if fired != 2:
+        print("eqoi keyboard: Enter did not fire the focused button")
+        app.destroy()
+        return 8
+
+    # Enter is one-shot: it must not fire again on the following frame.
+    if app.begin_offscreen() == 1:
+        fired = draw_buttons(app)
+        app.end()
+    if fired != 0:
+        print("eqoi keyboard: Enter fired twice from one press")
+        app.destroy()
+        return 9
+
+    # ---------------------------------------------------------------
+    # Focus survives a widget moving, because Tab order is rebuilt from
+    # identity rather than from position.
+    # ---------------------------------------------------------------
+    if app.begin_offscreen() == 1:
+        app.button(10, 10, 120, 32, "One")
+        app.push_id_str("mover")
+        app.button(10, 60, 120, 32, "Two")
+        app.pop_id()
+        app.end()
+    app.destroy()
+
+    # ---------------------------------------------------------------
+    # Arrow keys move a focused slider's value.
+    # ---------------------------------------------------------------
+    b: EqoiApp = EqoiApp.headless(400, 300)
+    if b.is_valid() == 0:
+        print("eqoi keyboard: headless app creation failed")
+        return 10
+    volume: i64 = b.alloc_int(0)
+
+    # Click the middle of the track to focus it and set a known value.
+    b.inject_mouse_move(200, 105)
+    if b.begin_offscreen() == 1:
+        b.slider(100, 100, 200, 0, 100, volume)
+        b.end()
+    b.inject_left_down()
+    if b.begin_offscreen() == 1:
+        b.slider(100, 100, 200, 0, 100, volume)
+        b.end()
+    if b.get_int(volume) != 50:
+        print("eqoi keyboard: slider did not take the clicked value")
+        b.destroy()
+        return 11
+    b.inject_left_up()
+    if b.begin_offscreen() == 1:
+        b.slider(100, 100, 200, 0, 100, volume)
+        b.end()
+
+    # One twentieth of a 0..100 range is 5.
+    b.inject_arrow_right()
+    if b.begin_offscreen() == 1:
+        b.slider(100, 100, 200, 0, 100, volume)
+        b.end()
+    if b.get_int(volume) != 55:
+        print("eqoi keyboard: right arrow did not raise the focused slider")
+        b.destroy()
+        return 12
+
+    b.inject_arrow_left()
+    b.inject_arrow_left()
+    if b.begin_offscreen() == 1:
+        b.slider(100, 100, 200, 0, 100, volume)
+        b.end()
+    if b.get_int(volume) != 50:
+        print("eqoi keyboard: left arrow did not lower the focused slider")
+        b.destroy()
+        return 13
+    b.destroy()
+
+    # ---------------------------------------------------------------
+    # The wheel scrolls over the content, not only over the 12px track.
+    # ---------------------------------------------------------------
+    c: EqoiApp = EqoiApp.headless(400, 300)
+    if c.is_valid() == 0:
+        print("eqoi keyboard: headless app creation failed")
+        return 14
+    scroll: i64 = c.alloc_int(0)
+
+    # Well inside the content; the scrollbar column sits at x >= 188.
+    c.inject_mouse_move(60, 50)
+    c.inject_wheel(-1.0)
+    if c.begin_offscreen() == 1:
+        c.scrollable_begin(0, 0, 200, 100, scroll, 500)
+        c.scrollable_end()
+        c.end()
+    if c.get_int(scroll) != 40:
+        print("eqoi keyboard: the wheel did not scroll over the content area")
+        c.destroy()
+        return 15
+
+    c.inject_wheel(1.0)
+    if c.begin_offscreen() == 1:
+        c.scrollable_begin(0, 0, 200, 100, scroll, 500)
+        c.scrollable_end()
+        c.end()
+    if c.get_int(scroll) != 0:
+        print("eqoi keyboard: the wheel did not scroll back")
+        c.destroy()
+        return 16
+
+    # A pointer outside the region must not scroll it.
+    c.inject_mouse_move(350, 280)
+    c.inject_wheel(-1.0)
+    if c.begin_offscreen() == 1:
+        c.scrollable_begin(0, 0, 200, 100, scroll, 500)
+        c.scrollable_end()
+        c.end()
+    if c.get_int(scroll) != 0:
+        print("eqoi keyboard: the wheel scrolled a region the pointer was not over")
+        c.destroy()
+        return 17
+    c.destroy()
+
+    # ---------------------------------------------------------------
+    # A dropdown owns its open state, so Escape closes it and keyboard
+    # focus can sit elsewhere while it stays open.
+    # ---------------------------------------------------------------
+    d: EqoiApp = EqoiApp.headless(400, 300)
+    if d.is_valid() == 0:
+        print("eqoi keyboard: headless app creation failed")
+        return 18
+    picked: i64 = d.alloc_int(0)
+    field: i64 = d.alloc_buf(16)
+
+    d.inject_mouse_move(60, 20)
+    if d.begin_offscreen() == 1:
+        d.dropdown_begin(10, 10, 120, 28, picked, "Pick")
+        d.dropdown_end()
+        d.text_input(10, 200, 200, 28, field, 15)
+        d.end()
+
+    d.inject_left_down()
+    opened: i32 = 0
+    if d.begin_offscreen() == 1:
+        opened = d.dropdown_begin(10, 10, 120, 28, picked, "Pick")
+        d.dropdown_end()
+        d.text_input(10, 200, 200, 28, field, 15)
+        d.end()
+    if opened != 1:
+        print("eqoi keyboard: clicking the dropdown did not open it")
+        d.destroy()
+        return 19
+    d.inject_left_up()
+
+    # Move keyboard focus onto the text input while the list stays open.
+    d.inject_tab()
+    if d.begin_offscreen() == 1:
+        opened = d.dropdown_begin(10, 10, 120, 28, picked, "Pick")
+        d.dropdown_end()
+        d.text_input(10, 200, 200, 28, field, 15)
+        d.end()
+    if opened != 1:
+        print("eqoi keyboard: moving focus closed the dropdown")
+        d.destroy()
+        return 20
+    if d.focus_id == d.dd_open_id:
+        print("eqoi keyboard: dropdown open state is still tied to keyboard focus")
+        d.destroy()
+        return 21
+
+    # Escape closes it.
+    d.inject_escape()
+    if d.begin_offscreen() == 1:
+        opened = d.dropdown_begin(10, 10, 120, 28, picked, "Pick")
+        d.dropdown_end()
+        d.text_input(10, 200, 200, 28, field, 15)
+        d.end()
+    if opened != 0:
+        print("eqoi keyboard: Escape did not close the dropdown")
+        d.destroy()
+        return 22
+    d.destroy()
+
+    # ---------------------------------------------------------------
+    # Tab items keep their identity when the bar moves.
+    # ---------------------------------------------------------------
+    e: EqoiApp = EqoiApp.headless(400, 300)
+    if e.is_valid() == 0:
+        print("eqoi keyboard: headless app creation failed")
+        return 23
+    active: i64 = e.alloc_int(0)
+
+    e.inject_mouse_move(350, 280)
+    e.inject_tab()
+    if e.begin_offscreen() == 1:
+        e.tab_bar_begin(0, 0, 300, 32, active)
+        e.tab_bar_item("Alpha", 100)
+        e.tab_bar_item("Beta", 100)
+        e.tab_bar_end()
+        e.end()
+    first_focus: i64 = e.focus_id
+    if first_focus == 0:
+        print("eqoi keyboard: tab items are not reachable by Tab")
+        e.destroy()
+        return 24
+
+    # Same bar, same items, different item widths: identity must hold.
+    if e.begin_offscreen() == 1:
+        e.tab_bar_begin(0, 0, 300, 32, active)
+        e.tab_bar_item("Alpha", 140)
+        e.tab_bar_item("Beta", 140)
+        e.tab_bar_end()
+        e.end()
+    if e.focus_id != first_focus:
+        print("eqoi keyboard: a tab item lost its identity when the widths changed")
+        e.destroy()
+        return 25
+    e.destroy()
+
+    print("eqoi keyboard: ok")
+    return 0
