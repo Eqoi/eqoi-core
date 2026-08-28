@@ -9,7 +9,7 @@ On Linux the public API is display-server neutral. The shared `window` adapter
 uses native Wayland/xdg-shell when available and falls back to X11/XWayland;
 Eqoi does not contain display-server-specific rendering or input code.
 
-Current version: **0.20.0**
+Current version: **0.21.0**
 
 ```text
 Eqoi application
@@ -137,6 +137,37 @@ license under `examples/assets/fonts`.
 `panel_begin/end` and scrollable regions use the dynamic nested clip stack from
 `ui`. Draw commands and command text grow safely instead of being silently
 dropped at a fixed capacity.
+
+## State
+
+A widget that outlives a frame keeps its value somewhere the application
+owns. That worked through a bare `i64`: every checkbox, slider and text field
+took the same anonymous number, and nothing stopped a text buffer being
+handed to a slider or a length being passed as a value.
+
+Handles are the same pointers with a type on them.
+
+```dolet
+enabled: EqoiBool = app.new_bool(1)
+volume:  EqoiInt  = app.new_int(64)
+name:    EqoiText = app.new_text(64)
+
+app.checkbox(x, y, "Enable", enabled)
+app.slider(x, y, 200, 0, 100, volume)
+app.text_input(x, y, 240, 32, name)      # no length to get wrong
+```
+
+A text handle carries its own capacity, which removes the `max_len` argument
+entirely — a length passed separately is a length that can be passed wrongly.
+`get`, `set`, `add`, `toggle`, `str`, `length` and `clear` read and write
+without going through the app.
+
+An unset handle answers rather than reaching through a null pointer, so a
+struct that was never initialised reads 0 and ignores writes instead of
+faulting.
+
+**The untyped form still works.** Every widget takes both, so nothing written
+against the old shape has to change, and the two can be mixed in one frame.
 
 ## State and themes
 

@@ -1,0 +1,163 @@
+import eqoi
+
+# Typed state handles. The point is not that they store differently — they
+# store exactly the same bytes — but that the type says what is inside, and
+# a text handle carries the length that was previously a separate argument
+# waiting to be passed wrongly.
+
+fun main() -> i32:
+    app: EqoiApp = EqoiApp.headless(600, 400)
+    if app.is_valid() == 0:
+        print("eqoi state: headless app creation failed")
+        return 1
+
+    # ---------------------------------------------------------------
+    # Integers.
+    # ---------------------------------------------------------------
+    volume: EqoiInt = app.new_int(64)
+    if volume.is_valid() != 1:
+        print("eqoi state: the integer handle is not valid")
+        app.destroy()
+        return 2
+    if volume.get() != 64:
+        print("eqoi state: the integer did not take its initial value")
+        app.destroy()
+        return 3
+    volume.set(80)
+    if volume.get() != 80:
+        print("eqoi state: setting the integer did not stick")
+        app.destroy()
+        return 4
+    volume.add(5)
+    if volume.get() != 85:
+        print("eqoi state: adding to the integer is wrong")
+        app.destroy()
+        return 5
+
+    # ---------------------------------------------------------------
+    # Booleans.
+    # ---------------------------------------------------------------
+    enabled: EqoiBool = app.new_bool(1)
+    if enabled.get() != 1:
+        print("eqoi state: the boolean did not take its initial value")
+        app.destroy()
+        return 6
+    enabled.toggle()
+    if enabled.get() != 0:
+        print("eqoi state: toggling the boolean did not flip it")
+        app.destroy()
+        return 7
+    enabled.toggle()
+    if enabled.get() != 1:
+        print("eqoi state: toggling back did not restore it")
+        app.destroy()
+        return 8
+
+    # ---------------------------------------------------------------
+    # Text, which knows its own length.
+    # ---------------------------------------------------------------
+    name: EqoiText = app.new_text(8)
+    if name.length() != 0:
+        print("eqoi state: a fresh text handle is not empty")
+        app.destroy()
+        return 9
+    name.set("Hamza")
+    if name.length() != 5:
+        print("eqoi state: the text did not take its value")
+        app.destroy()
+        return 10
+    if Memory.compare(name.ptr, "Hamza" as i64, 5) != 0:
+        print("eqoi state: the text holds the wrong bytes")
+        app.destroy()
+        return 11
+    # More than it can hold is truncated rather than overrunning.
+    name.set("far more than eight characters")
+    if name.length() != 8:
+        print("eqoi state: the text was not truncated to its capacity")
+        app.destroy()
+        return 12
+    name.clear()
+    if name.length() != 0:
+        print("eqoi state: clearing the text did not empty it")
+        app.destroy()
+        return 13
+
+    # ---------------------------------------------------------------
+    # Widgets take the handle, and it is the same state underneath: the
+    # untyped pointer sees every change a widget makes.
+    # ---------------------------------------------------------------
+    checked: EqoiBool = app.new_bool(0)
+    app.inject_mouse_move(28, 108)
+    app.inject_left_down()
+    if app.begin_offscreen() == 1:
+        app.checkbox(20, 100, "Enable", checked)
+        app.end()
+    if checked.get() != 1:
+        print("eqoi state: a widget taking a handle did not change it")
+        app.destroy()
+        return 14
+    if app.get_bool(checked.ptr) != 1:
+        print("eqoi state: the handle and the raw pointer disagree")
+        app.destroy()
+        return 15
+    app.inject_left_up()
+    if app.begin_offscreen() == 1:
+        app.end()
+
+    # ---------------------------------------------------------------
+    # A text field takes its length from the handle, so the caller has no
+    # length to get wrong.
+    # ---------------------------------------------------------------
+    field: EqoiText = app.new_text(6)
+    app.inject_mouse_move(120, 214)
+    app.inject_left_down()
+    if app.begin_offscreen() == 1:
+        app.text_input(60, 200, 200, 28, field)
+        app.end()
+    app.inject_left_up()
+    if app.begin_offscreen() == 1:
+        app.text_input(60, 200, 200, 28, field)
+        app.end()
+    app.inject_text("abcdefghij")
+    if app.begin_offscreen() == 1:
+        app.text_input(60, 200, 200, 28, field)
+        app.end()
+    if field.length() != 6:
+        print("eqoi state: the text field did not stop at the handle's capacity")
+        app.destroy()
+        return 16
+
+    # ---------------------------------------------------------------
+    # The untyped form still works, unchanged. Nothing written against it
+    # has to move.
+    # ---------------------------------------------------------------
+    raw: i64 = app.alloc_int(7)
+    if app.get_int(raw) != 7:
+        print("eqoi state: the untyped form stopped working")
+        app.destroy()
+        return 17
+    app.inject_mouse_move(590, 390)
+    if app.begin_offscreen() == 1:
+        app.slider(100, 300, 200, 0, 100, raw)
+        app.slider(100, 340, 200, 0, 100, volume)
+        app.end()
+    if app.get_int(raw) != 7 or volume.get() != 85:
+        print("eqoi state: mixing the two forms in one frame disturbed either")
+        app.destroy()
+        return 18
+
+    # An unset handle answers rather than reaching through a null pointer.
+    empty: EqoiInt = EqoiInt()
+    if empty.is_valid() != 0 or empty.get() != 0:
+        print("eqoi state: an unset handle did not report itself empty")
+        app.destroy()
+        return 19
+    empty.set(5)
+    if empty.get() != 0:
+        print("eqoi state: an unset handle accepted a write")
+        app.destroy()
+        return 20
+
+    app.destroy()
+    print("eqoi state: ok")
+    return 0

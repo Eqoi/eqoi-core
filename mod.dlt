@@ -25,11 +25,15 @@ load eqoi/table
 load eqoi/anim
 load eqoi/widgets
 load eqoi/controls
+load eqoi/state
 load eqoi/headless
 
 export EqoiTheme
 export EqoiLayout
 export EqoiApp
+export EqoiInt
+export EqoiBool
+export EqoiText
 export EQOI_LAYOUT_COLUMN
 export EQOI_LAYOUT_ROW
 export EQOI_LAYOUT_GRID
