@@ -23,6 +23,11 @@ export EqoiLayout
 export EqoiApp
 export EQOI_LAYOUT_COLUMN
 export EQOI_LAYOUT_ROW
+export EQOI_LAYOUT_GRID
+export EQOI_ALIGN_START
+export EQOI_ALIGN_CENTER
+export EQOI_ALIGN_END
+export EQOI_ALIGN_STRETCH
 export eqoi_theme_dark
 export eqoi_theme_light
 export eqoi_app_create

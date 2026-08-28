@@ -1,0 +1,221 @@
+import eqoi
+
+# Layout is pure geometry, so every expectation here is an exact number
+# worked out by hand rather than a tolerance.
+
+fun main() -> i32:
+    # ---------------------------------------------------------------
+    # Flexible sizing: equal weights come out equal, and the run fills
+    # the axis exactly once the gaps are accounted for.
+    # ---------------------------------------------------------------
+    # row 300 wide, padding 10, gap 10 -> 280 inner, 20 of it gaps.
+    r: EqoiLayout = EqoiLayout.row(0, 0, 300, 100, 10, 10)
+    r.flex_even(3)
+    a: UIRect = r.next_flex(1)
+    b: UIRect = r.next_flex(1)
+    c: UIRect = r.next_flex(1)
+    if a.left != 10 or a.right != 96:
+        print("eqoi layout: first flex share is wrong")
+        return 1
+    if b.left != 106 or b.right != 193:
+        print("eqoi layout: second flex share is wrong")
+        return 2
+    if c.left != 203 or c.right != 290:
+        print("eqoi layout: third flex share did not reach the far edge")
+        return 3
+    # Cross axis fills: 100 tall, padding 10.
+    if a.top != 10 or a.bottom != 90:
+        print("eqoi layout: flex item did not fill the cross axis")
+        return 4
+
+    # Weighted 1:2 across two items.
+    r2: EqoiLayout = EqoiLayout.row(0, 0, 310, 100, 5, 10)
+    r2.flex(3, 2)
+    w1: UIRect = r2.next_flex(1)
+    w2: UIRect = r2.next_flex(2)
+    if w1.left != 5 or w1.right != 101:
+        print("eqoi layout: weighted flex gave the wrong small share")
+        return 5
+    if w2.left != 111 or w2.right != 305:
+        print("eqoi layout: weighted flex gave the wrong large share")
+        return 6
+
+    # ---------------------------------------------------------------
+    # Cross-axis alignment. Default START must match the original
+    # behaviour exactly.
+    # ---------------------------------------------------------------
+    col: EqoiLayout = EqoiLayout.column(0, 0, 200, 300, 10, 5)
+    start: UIRect = col.next(50, 20)
+    if start.left != 10 or start.right != 60:
+        print("eqoi layout: default cross alignment is no longer START")
+        return 7
+
+    col.align(EQOI_ALIGN_CENTER)
+    centred: UIRect = col.next(50, 20)
+    if centred.left != 75 or centred.right != 125:
+        print("eqoi layout: CENTER did not centre on the cross axis")
+        return 8
+
+    col.align(EQOI_ALIGN_END)
+    tail: UIRect = col.next(50, 20)
+    if tail.left != 140 or tail.right != 190:
+        print("eqoi layout: END did not sit against the far edge")
+        return 9
+
+    col.align(EQOI_ALIGN_STRETCH)
+    stretched: UIRect = col.next(50, 20)
+    if stretched.left != 10 or stretched.right != 190:
+        print("eqoi layout: STRETCH did not override the requested size")
+        return 10
+
+    # ---------------------------------------------------------------
+    # Main-axis alignment shifts the starting cursor by a known content
+    # extent, which is all a single pass can honestly do.
+    # ---------------------------------------------------------------
+    mc: EqoiLayout = EqoiLayout.column(0, 0, 200, 300, 10, 5)
+    mc.align_main(EQOI_ALIGN_CENTER, 100)
+    first: UIRect = mc.next(0, 40)
+    if first.top != 100 or first.bottom != 140:
+        print("eqoi layout: align_main CENTER did not offset the cursor")
+        return 11
+
+    me: EqoiLayout = EqoiLayout.column(0, 0, 200, 300, 10, 5)
+    me.align_main(EQOI_ALIGN_END, 100)
+    last: UIRect = me.next(0, 40)
+    if last.top != 190:
+        print("eqoi layout: align_main END did not offset the cursor")
+        return 12
+
+    # ---------------------------------------------------------------
+    # Margins expand the slot; the rectangle handed back does not grow.
+    # ---------------------------------------------------------------
+    mg: EqoiLayout = EqoiLayout.column(0, 0, 200, 300, 10, 0)
+    mg.margin(6)
+    m1: UIRect = mg.next(0, 20)
+    m2: UIRect = mg.next(0, 20)
+    if m1.left != 16 or m1.top != 16 or m1.right != 184 or m1.bottom != 36:
+        print("eqoi layout: margin did not inset the first rectangle")
+        return 13
+    if m2.top != 48:
+        print("eqoi layout: margin did not expand the slot")
+        return 14
+
+    # ---------------------------------------------------------------
+    # Main-axis clamps.
+    # ---------------------------------------------------------------
+    lim: EqoiLayout = EqoiLayout.column(0, 0, 200, 300, 0, 0)
+    lim.limits(30, 50)
+    small: UIRect = lim.next(0, 10)
+    big: UIRect = lim.next(0, 200)
+    if small.bottom - small.top != 30:
+        print("eqoi layout: minimum main size was not applied")
+        return 15
+    if big.bottom - big.top != 50:
+        print("eqoi layout: maximum main size was not applied")
+        return 16
+
+    # ---------------------------------------------------------------
+    # Wrapping. The item that does not fit starts the next line at its
+    # full size rather than being squeezed into what was left.
+    # ---------------------------------------------------------------
+    wr: EqoiLayout = EqoiLayout.row(0, 0, 200, 200, 0, 10)
+    wr.wrap(1)
+    p1: UIRect = wr.next(80, 30)
+    p2: UIRect = wr.next(80, 30)
+    p3: UIRect = wr.next(80, 30)
+    if p1.left != 0 or p2.left != 90:
+        print("eqoi layout: wrapped row did not flow along the first line")
+        return 17
+    if p3.left != 0:
+        print("eqoi layout: the third item did not wrap to a new line")
+        return 18
+    if p3.top != 40:
+        print("eqoi layout: the new line did not clear the previous one")
+        return 19
+    if p3.right - p3.left != 80:
+        print("eqoi layout: the wrapped item was squeezed instead of wrapped")
+        return 20
+
+    # ---------------------------------------------------------------
+    # Grid: cells flow across, then down, and a span that would overflow
+    # the row starts a new one.
+    # ---------------------------------------------------------------
+    # 320 wide, padding 10 -> 300 inner, 2 gaps of 10 -> cells of 93.
+    g: EqoiLayout = EqoiLayout.grid(0, 0, 320, 240, 10, 10, 3)
+    c1: UIRect = g.next_cell(50)
+    c2: UIRect = g.next_cell(50)
+    c3: UIRect = g.next_cell(50)
+    c4: UIRect = g.next_cell(50)
+    if c1.left != 10 or c1.top != 10 or c1.right != 103:
+        print("eqoi layout: first grid cell is wrong")
+        return 21
+    if c2.left != 113 or c3.left != 216:
+        print("eqoi layout: grid cells did not flow across the row")
+        return 22
+    if c4.left != 10 or c4.top != 70:
+        print("eqoi layout: the grid did not wrap to a second row")
+        return 23
+
+    g2: EqoiLayout = EqoiLayout.grid(0, 0, 320, 240, 10, 10, 3)
+    s1: UIRect = g2.next_cell_span(2, 50)
+    s2: UIRect = g2.next_cell_span(2, 50)
+    if s1.left != 10 or s1.right != 206:
+        print("eqoi layout: a two-column span is the wrong width")
+        return 24
+    if s2.left != 10 or s2.top != 70:
+        print("eqoi layout: an overflowing span did not start a new row")
+        return 25
+
+    # ---------------------------------------------------------------
+    # Nesting: a layout built inside a rectangle another produced.
+    # ---------------------------------------------------------------
+    outer: EqoiLayout = EqoiLayout.column(0, 0, 400, 300, 10, 10)
+    slot: UIRect = outer.next(0, 100)
+    inner: EqoiLayout = EqoiLayout.column_in(slot, 5, 5)
+    child: UIRect = inner.next(0, 20)
+    if slot.left != 10 or slot.top != 10 or slot.right != 390:
+        print("eqoi layout: the parent slot is wrong")
+        return 26
+    if child.left != 15 or child.top != 15 or child.right != 385:
+        print("eqoi layout: the nested layout did not sit inside its slot")
+        return 27
+
+    # ---------------------------------------------------------------
+    # Content measurement, for sizing a parent to what it holds.
+    # ---------------------------------------------------------------
+    cm: EqoiLayout = EqoiLayout.column(0, 0, 200, 300, 10, 8)
+    cm.next(0, 30)
+    cm.next(0, 30)
+    cm.next(0, 30)
+    if cm.content_main() != 106:
+        print("eqoi layout: content extent does not match what was placed")
+        return 28
+    used: UIRect = cm.used_rect()
+    if used.bottom - used.top != 126:
+        print("eqoi layout: used_rect did not include the padding")
+        return 29
+
+    # ---------------------------------------------------------------
+    # skip advances without producing a rectangle.
+    # ---------------------------------------------------------------
+    sk: EqoiLayout = EqoiLayout.column(0, 0, 200, 300, 0, 10)
+    sk.next(0, 20)
+    sk.skip(50)
+    after: UIRect = sk.next(0, 20)
+    if after.top != 90:
+        print("eqoi layout: skip did not advance the cursor")
+        return 30
+
+    # ---------------------------------------------------------------
+    # reset returns the layout to its starting state.
+    # ---------------------------------------------------------------
+    rs: EqoiLayout = EqoiLayout.column(0, 0, 200, 300, 10, 5)
+    rs.next(0, 40)
+    rs.reset()
+    again: UIRect = rs.next(0, 40)
+    if again.top != 10 or rs.content_main() != 40:
+        print("eqoi layout: reset did not restore the starting state")
+        return 31
+
+    print("eqoi layout: ok")
+    return 0

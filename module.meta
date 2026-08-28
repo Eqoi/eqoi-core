@@ -4,10 +4,10 @@
 
 [info]
 name = eqoi
-version = 0.10.0
+version = 0.11.0
 layer = composition
 no-bindings = true
-description = Native application framework for Dolet with keyboard focus traversal, a nestable widget identity stack, headless offscreen testing, loadable proportional TrueType text, anti-aliased widgets, lifecycle, software surfaces, input snapshots, responsive layout, themes, managed state, and application services on top of ui.
+description = Native application framework for Dolet with keyboard focus traversal, a nestable widget identity stack, headless offscreen testing, loadable proportional TrueType text, anti-aliased widgets, lifecycle, software surfaces, input snapshots, flexible responsive layout with alignment, wrapping and grids, themes, managed state, and application services on top of ui.
 
 [dependencies]
 window = required

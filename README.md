@@ -9,7 +9,7 @@ On Linux the public API is display-server neutral. The shared `window` adapter
 uses native Wayland/xdg-shell when available and falls back to X11/XWayland;
 Eqoi does not contain display-server-specific rendering or input code.
 
-Current version: **0.10.0**
+Current version: **0.11.0**
 
 ```text
 Eqoi application
@@ -49,6 +49,56 @@ if app.is_valid() == 1:
 values. A non-positive cross-axis size fills the inner area; a non-positive
 main-axis size consumes the remaining area. Layout only computes geometry, so it
 can be tested without opening a window.
+
+The model is single-pass, because an immediate-mode frame places a widget the
+moment it is asked for and cannot look ahead at items that have not been
+requested yet. The API is built inside that constraint rather than pretending
+it is not there: cross-axis work needs no lookahead, so it is automatic;
+flexible sizing needs the plan, so `flex` takes it; main-axis alignment needs
+the content extent, so `align_main` takes it.
+
+**Flexible sizing.** `flex(total_weight, item_count)` declares a run and
+reserves the gaps between its items, so equal weights come out equal and the
+run ends exactly on the far edge. `flex_even(n)` is the equal-share shorthand.
+
+```dolet
+bar: EqoiLayout = EqoiLayout.row(0, 0, 300, 100, 10, 10)
+bar.flex(3, 2)
+narrow: UIRect = bar.next_flex(1)      # one third
+wide: UIRect = bar.next_flex(2)        # two thirds
+```
+
+**Alignment.** `align(mode)` places items that give an explicit cross size:
+`EQOI_ALIGN_START` (the default, and the original behaviour), `CENTER`, `END`,
+or `STRETCH` to ignore the requested size and fill. `align_main(mode, extent)`
+shifts the starting cursor so a known amount of content sits centred or
+end-aligned along the main axis.
+
+**Constraints.** `margin(n)` reserves space around every item by growing its
+slot. `limits(min, max)` clamps each item's main-axis size, with a maximum of
+0 meaning unbounded.
+
+**Wrapping.** `wrap(1)` moves to a new line (row) or column (column) when an
+item does not fit. The item that did not fit starts the new line at its full
+size rather than being squeezed into what was left.
+
+**Grids.** `EqoiLayout.grid(x, y, w, h, padding, gap, columns)` flows cells
+across and then down. `next_cell(height)` takes one cell and
+`next_cell_span(span, height)` takes several; a span that would overflow the
+row starts a new one.
+
+**Nesting.** `column_in(rect, padding, gap)`, `row_in`, and `grid_in` build a
+child layout inside a rectangle a parent produced.
+
+```dolet
+slot: UIRect = page.next(0, 100)
+panel: EqoiLayout = EqoiLayout.column_in(slot, 5, 5)
+```
+
+**Measuring.** `content_main()` reports the main-axis extent consumed so far
+and `used_rect()` the rectangle it occupies, so a container can be sized to
+what was just laid out inside it. `skip(n)` advances without producing a
+rectangle.
 
 ## Widgets
 

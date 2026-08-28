@@ -1,11 +1,34 @@
 # ============================
 #  Eqoi Layout
 # ============================
-# Small, deterministic layout primitives. Layout computes rectangles only;
-# it does not draw or depend on a native window backend.
+# Deterministic layout primitives. Layout computes rectangles only; it never
+# draws and never touches a window backend, so every rule here is testable
+# without opening anything.
+#
+# The model is single-pass on purpose. An immediate-mode frame places a widget
+# the moment the application asks for it, so a layout cannot look ahead at
+# items that have not been requested yet. Everything below is designed to give
+# real layout control inside that constraint rather than to pretend the
+# constraint is not there:
+#
+#   - Cross-axis sizing and alignment need no lookahead at all.
+#   - Flexible main-axis sizing needs to know the plan up front, so flex()
+#     takes the total weight and the item count and reserves the gaps.
+#   - Main-axis alignment needs the content extent, so align_main() takes it.
+#
+# Defaults reproduce the original behaviour exactly: a non-positive cross size
+# fills, a non-positive main size consumes the remaining area, an explicit
+# cross size sits at the start of the cross axis, and rectangles are always
+# clamped to the layout bounds.
 
 EQOI_LAYOUT_COLUMN: i32 = 1
 EQOI_LAYOUT_ROW:    i32 = 2
+EQOI_LAYOUT_GRID:   i32 = 3
+
+EQOI_ALIGN_START:   i32 = 0
+EQOI_ALIGN_CENTER:  i32 = 1
+EQOI_ALIGN_END:     i32 = 2
+EQOI_ALIGN_STRETCH: i32 = 3
 
 @stack
 struct EqoiLayout:
@@ -19,6 +42,32 @@ struct EqoiLayout:
     cursor_x: i32 = 0
     cursor_y: i32 = 0
 
+    # Cross-axis placement for items that give an explicit cross size.
+    # START reproduces the original behaviour.
+    align_cross: i32 = EQOI_ALIGN_START
+
+    # Space reserved around every item, expanding the slot it occupies.
+    item_margin: i32 = 0
+
+    # Clamps on each item's main-axis size. A max of 0 means no maximum.
+    min_main: i32 = 0
+    max_main: i32 = 0
+
+    # Flexible sizing plan, declared by flex().
+    flex_weight: i32 = 0
+    flex_items: i32 = 0
+
+    # Wrapping to a new line (row) or column (column).
+    wrap_on: i32 = 0
+    line_extent: i32 = 0
+
+    # Grid geometry.
+    columns: i32 = 0
+    cell: i32 = 0
+
+    # Main-axis extent consumed so far, for sizing a parent to its content.
+    used_main: i32 = 0
+
 attach EqoiLayout:
     static fun column(x: i32, y: i32, width: i32, height: i32, padding: i32, gap: i32) -> EqoiLayout:
         layout: EqoiLayout = EqoiLayout()
@@ -30,6 +79,26 @@ attach EqoiLayout:
         layout.init(x, y, width, height, padding, gap, EQOI_LAYOUT_ROW)
         return layout
 
+    # Nest inside a rectangle another layout produced. This is how a child
+    # layout is built: take a slot, then lay out inside it.
+    static fun column_in(rect: UIRect, padding: i32, gap: i32) -> EqoiLayout:
+        return EqoiLayout.column(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, padding, gap)
+
+    static fun row_in(rect: UIRect, padding: i32, gap: i32) -> EqoiLayout:
+        return EqoiLayout.row(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, padding, gap)
+
+    static fun grid(x: i32, y: i32, width: i32, height: i32, padding: i32, gap: i32, columns: i32) -> EqoiLayout:
+        layout: EqoiLayout = EqoiLayout()
+        layout.init(x, y, width, height, padding, gap, EQOI_LAYOUT_GRID)
+        if columns < 1:
+            layout.columns = 1
+        else:
+            layout.columns = columns
+        return layout
+
+    static fun grid_in(rect: UIRect, padding: i32, gap: i32, columns: i32) -> EqoiLayout:
+        return EqoiLayout.grid(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, padding, gap, columns)
+
     fun init(self, x: i32, y: i32, width: i32, height: i32, padding: i32, gap: i32, direction: i32):
         self.x = x
         self.y = y
@@ -38,9 +107,82 @@ attach EqoiLayout:
         self.padding = padding
         self.gap = gap
         self.direction = direction
+        self.align_cross = EQOI_ALIGN_START
+        self.item_margin = 0
+        self.min_main = 0
+        self.max_main = 0
+        self.flex_weight = 0
+        self.flex_items = 0
+        self.wrap_on = 0
+        self.line_extent = 0
+        self.columns = 0
+        self.cell = 0
+        self.used_main = 0
         self.cursor_x = x + padding
         self.cursor_y = y + padding
 
+    # ---------------------------------------------------------------
+    # Configuration
+    # ---------------------------------------------------------------
+    # Where an item sits on the cross axis when it gives an explicit cross
+    # size. STRETCH ignores the requested size and fills, which is what a
+    # non-positive cross size already does.
+    fun align(self, mode: i32):
+        self.align_cross = mode
+
+    # Shift the starting cursor so a known amount of content sits centred or
+    # end-aligned on the main axis. Call before the first item.
+    fun align_main(self, mode: i32, content_main: i32):
+        span: i32 = self.inner_main()
+        offset: i32 = 0
+        if mode == EQOI_ALIGN_CENTER:
+            offset = (span - content_main) / 2
+        elif mode == EQOI_ALIGN_END:
+            offset = span - content_main
+        if offset < 0:
+            offset = 0
+        if self.direction == EQOI_LAYOUT_ROW:
+            self.cursor_x = self.x + self.padding + offset
+        else:
+            self.cursor_y = self.y + self.padding + offset
+
+    # Space reserved around every subsequent item. The slot grows; the
+    # rectangle handed back does not.
+    fun margin(self, amount: i32):
+        if amount < 0:
+            self.item_margin = 0
+        else:
+            self.item_margin = amount
+
+    # Clamp each item's main-axis size. A maximum of 0 means unbounded.
+    fun limits(self, minimum: i32, maximum: i32):
+        self.min_main = minimum
+        self.max_main = maximum
+
+    # Declare a flexible run: total weight across item_count items. The gaps
+    # between them are reserved up front, so equal weights come out equal.
+    fun flex(self, total_weight: i32, item_count: i32):
+        if total_weight < 1:
+            self.flex_weight = 0
+            self.flex_items = 0
+            return
+        self.flex_weight = total_weight
+        if item_count < 1:
+            self.flex_items = 1
+        else:
+            self.flex_items = item_count
+
+    # Equal shares: the common case.
+    fun flex_even(self, item_count: i32):
+        self.flex(item_count, item_count)
+
+    # Move to a new line (row) or column (column) when an item does not fit.
+    fun wrap(self, enabled: i32):
+        self.wrap_on = enabled
+
+    # ---------------------------------------------------------------
+    # Measurements
+    # ---------------------------------------------------------------
     fun inner_width(self) -> i32:
         value: i32 = self.width - self.padding * 2
         if value < 0:
@@ -52,6 +194,16 @@ attach EqoiLayout:
         if value < 0:
             return 0
         return value
+
+    fun inner_main(self) -> i32:
+        if self.direction == EQOI_LAYOUT_ROW:
+            return self.inner_width()
+        return self.inner_height()
+
+    fun inner_cross(self) -> i32:
+        if self.direction == EQOI_LAYOUT_ROW:
+            return self.inner_height()
+        return self.inner_width()
 
     fun remaining_width(self) -> i32:
         value: i32 = self.x + self.width - self.padding - self.cursor_x
@@ -65,39 +217,207 @@ attach EqoiLayout:
             return 0
         return value
 
-    # A non-positive cross-axis size means "fill". A non-positive main-axis
-    # size means "consume the remaining area". Returned rectangles are always
-    # clamped to the layout bounds.
-    fun next(self, item_width: i32, item_height: i32) -> UIRect:
-        width: i32 = item_width
-        height: i32 = item_height
-
+    fun remaining_cross(self) -> i32:
+        value: i32 = 0
         if self.direction == EQOI_LAYOUT_ROW:
-            available_width: i32 = self.remaining_width()
-            if width <= 0 or width > available_width:
-                width = available_width
-            if height <= 0:
-                height = self.inner_height()
-            if height > self.inner_height():
-                height = self.inner_height()
+            value = self.y + self.height - self.padding - self.cursor_y
+        else:
+            value = self.x + self.width - self.padding - self.cursor_x
+        if value < 0:
+            return 0
+        return value
 
-            rect: UIRect = ui_make_rect(self.cursor_x, self.y + self.padding, width, height)
-            self.cursor_x = self.cursor_x + width + self.gap
-            return rect
+    fun remaining_main(self) -> i32:
+        if self.direction == EQOI_LAYOUT_ROW:
+            return self.remaining_width()
+        return self.remaining_height()
 
-        available_height: i32 = self.remaining_height()
-        if height <= 0 or height > available_height:
-            height = available_height
-        if width <= 0:
-            width = self.inner_width()
-        if width > self.inner_width():
-            width = self.inner_width()
+    # Main-axis extent actually consumed, excluding the trailing gap. Use it
+    # to size a panel to the content that was just laid out inside it.
+    fun content_main(self) -> i32:
+        return self.used_main
 
-        rect: UIRect = ui_make_rect(self.x + self.padding, self.cursor_y, width, height)
-        self.cursor_y = self.cursor_y + height + self.gap
+    # The rectangle the placed content occupies, including padding.
+    fun used_rect(self) -> UIRect:
+        if self.direction == EQOI_LAYOUT_ROW:
+            return ui_make_rect(self.x, self.y, self.used_main + self.padding * 2, self.height)
+        return ui_make_rect(self.x, self.y, self.width, self.used_main + self.padding * 2)
+
+    fun bounds(self) -> UIRect:
+        return ui_make_rect(self.x, self.y, self.width, self.height)
+
+    # ---------------------------------------------------------------
+    # Placement
+    # ---------------------------------------------------------------
+    # A non-positive cross size fills the inner area. A non-positive main size
+    # consumes the remaining area. Rectangles are always clamped to bounds.
+    fun next(self, item_width: i32, item_height: i32) -> UIRect:
+        if self.direction == EQOI_LAYOUT_GRID:
+            return self.next_cell(item_height)
+        if self.direction == EQOI_LAYOUT_ROW:
+            return self.place(item_width, item_height)
+        return self.place(item_height, item_width)
+
+    # main_size / cross_size in axis terms, so one body serves both directions.
+    fun place(self, main_size: i32, cross_size: i32) -> UIRect:
+        margin: i32 = self.item_margin
+        slot_extra: i32 = margin * 2
+
+        # Wrap before measuring. Checking after the size has been clamped to
+        # what is left would never trigger: the item would already have been
+        # squeezed into the scrap it was supposed to escape.
+        if self.wrap_on == 1 and self.line_extent > 0 and main_size > 0:
+            if main_size + slot_extra > self.remaining_main():
+                self.new_line()
+
+        main: i32 = main_size
+        available: i32 = self.remaining_main() - slot_extra
+        if available < 0:
+            available = 0
+        if main <= 0 or main > available:
+            main = available
+        if self.min_main > 0 and main < self.min_main:
+            main = self.min_main
+        if self.max_main > 0 and main > self.max_main:
+            main = self.max_main
+
+        cross_span: i32 = self.remaining_cross() - slot_extra
+        if cross_span < 0:
+            cross_span = 0
+        cross: i32 = cross_size
+        if cross <= 0 or self.align_cross == EQOI_ALIGN_STRETCH:
+            cross = cross_span
+        if cross > cross_span:
+            cross = cross_span
+
+        cross_offset: i32 = 0
+        if self.align_cross == EQOI_ALIGN_CENTER:
+            cross_offset = (cross_span - cross) / 2
+        elif self.align_cross == EQOI_ALIGN_END:
+            cross_offset = cross_span - cross
+        if cross_offset < 0:
+            cross_offset = 0
+
+        rect: UIRect = ui_make_rect(0, 0, 0, 0)
+        if self.direction == EQOI_LAYOUT_ROW:
+            rect = ui_make_rect(self.cursor_x + margin, self.cursor_y + margin + cross_offset, main, cross)
+            self.cursor_x = self.cursor_x + main + slot_extra + self.gap
+        else:
+            rect = ui_make_rect(self.cursor_x + margin + cross_offset, self.cursor_y + margin, cross, main)
+            self.cursor_y = self.cursor_y + main + slot_extra + self.gap
+
+        advance: i32 = main + slot_extra
+        if self.used_main > 0:
+            self.used_main = self.used_main + self.gap + advance
+        else:
+            self.used_main = advance
+        if cross + slot_extra > self.line_extent:
+            self.line_extent = cross + slot_extra
         return rect
+
+    # Take a share of the remaining main axis from the plan set by flex().
+    # Without a plan the item consumes everything left, matching next(0, 0).
+    fun next_flex(self, weight: i32) -> UIRect:
+        w: i32 = weight
+        if w < 1:
+            w = 1
+        if self.flex_weight < 1 or self.flex_items < 1:
+            return self.next(0, 0)
+
+        # Reserve the gaps still to come so equal weights land equal.
+        reserved: i32 = 0
+        if self.flex_items > 1:
+            reserved = self.gap * (self.flex_items - 1)
+        usable: i32 = self.remaining_main() - reserved
+        if usable < 0:
+            usable = 0
+        share: i32 = (usable * w) / self.flex_weight
+        if w >= self.flex_weight:
+            share = usable
+
+        self.flex_weight = self.flex_weight - w
+        self.flex_items = self.flex_items - 1
+        if self.flex_weight < 0:
+            self.flex_weight = 0
+        if self.flex_items < 0:
+            self.flex_items = 0
+
+        return self.place(share, 0)
+
+    # One grid cell, flowing left to right and wrapping every `columns`.
+    fun next_cell(self, row_height: i32) -> UIRect:
+        return self.next_cell_span(1, row_height)
+
+    # A cell spanning several columns. A span wider than the grid is clamped.
+    fun next_cell_span(self, span: i32, row_height: i32) -> UIRect:
+        cols: i32 = self.columns
+        if cols < 1:
+            cols = 1
+        s: i32 = span
+        if s < 1:
+            s = 1
+        if s > cols:
+            s = cols
+
+        total_gap: i32 = self.gap * (cols - 1)
+        cell_w: i32 = (self.inner_width() - total_gap) / cols
+        if cell_w < 0:
+            cell_w = 0
+
+        column_index: i32 = self.cell
+        while column_index >= cols:
+            column_index = column_index - cols
+        # A span that would overflow the row starts a new row instead.
+        if column_index + s > cols:
+            self.cell = self.cell + (cols - column_index)
+            column_index = 0
+
+        row_index: i32 = self.cell / cols
+        h: i32 = row_height
+        if h <= 0:
+            h = self.inner_height()
+
+        span_w: i32 = cell_w * s + self.gap * (s - 1)
+        left: i32 = self.x + self.padding + column_index * (cell_w + self.gap)
+        top: i32 = self.y + self.padding + row_index * (h + self.gap)
+
+        self.cell = self.cell + s
+        rows_used: i32 = self.cell / cols
+        if self.cell > rows_used * cols:
+            rows_used = rows_used + 1
+        self.used_main = rows_used * h + (rows_used - 1) * self.gap
+        if self.used_main < 0:
+            self.used_main = 0
+        return ui_make_rect(left, top, span_w, h)
+
+    # Advance the cursor without producing a rectangle.
+    fun skip(self, main_size: i32):
+        amount: i32 = main_size
+        if amount < 0:
+            amount = 0
+        if self.direction == EQOI_LAYOUT_ROW:
+            self.cursor_x = self.cursor_x + amount + self.gap
+        else:
+            self.cursor_y = self.cursor_y + amount + self.gap
+        if self.used_main > 0:
+            self.used_main = self.used_main + self.gap + amount
+        else:
+            self.used_main = amount
+
+    fun new_line(self):
+        if self.direction == EQOI_LAYOUT_ROW:
+            self.cursor_x = self.x + self.padding
+            self.cursor_y = self.cursor_y + self.line_extent + self.gap
+        else:
+            self.cursor_y = self.y + self.padding
+            self.cursor_x = self.cursor_x + self.line_extent + self.gap
+        self.line_extent = 0
 
     fun reset(self):
         self.cursor_x = self.x + self.padding
         self.cursor_y = self.y + self.padding
-
+        self.line_extent = 0
+        self.cell = 0
+        self.used_main = 0
+        self.flex_weight = 0
+        self.flex_items = 0
