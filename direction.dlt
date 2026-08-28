@@ -1,0 +1,115 @@
+# ============================
+#  Eqoi Reading Direction
+# ============================
+# A right-to-left interface is not right-aligned text. The whole surface turns
+# over: a toolbar fills from the right, a checkbox puts its box on the right
+# with the label to its left, a scrollbar moves to the left edge, a slider
+# fills from the right, and tabs run right to left.
+#
+# Two things carry the direction, and between them they cover it:
+#
+#   Layout   Every rectangle is mirrored inside the layout's bounds. Rows,
+#            columns and grids all flow the other way with one transform
+#            rather than a direction test in every calculation.
+#
+#   Widgets  A widget with a side asks mirror_x for it. A widget that is
+#            symmetric — a button, a panel, a progress bar — needs nothing,
+#            which is most of them.
+#
+# The application sets it once. Layouts handed out by the app carry it, so
+# nested layouts stay consistent without the caller repeating themselves.
+
+attach EqoiApp:
+    fun set_direction(self, direction: i32):
+        self.direction = direction
+
+    fun use_rtl(self):
+        self.direction = EQOI_DIR_RTL
+
+    fun use_ltr(self):
+        self.direction = EQOI_DIR_LTR
+
+    fun is_rtl(self) -> i32:
+        if self.direction == EQOI_DIR_RTL:
+            return 1
+        return 0
+
+    # Mirror a horizontal span inside a container. The one call a widget needs
+    # to put its own parts on the correct side.
+    fun mirror_x(self, container_x: i32, container_width: i32, x: i32, width: i32) -> i32:
+        if self.direction == EQOI_DIR_LTR:
+            return x
+        return container_x + container_width - (x - container_x) - width
+
+    # ---------------------------------------------------------------
+    # Layouts that already know the direction
+    # ---------------------------------------------------------------
+    # EqoiLayout is standalone and pure, so it cannot ask an application what
+    # direction it is in. These hand out layouts already carrying it, which is
+    # what keeps a nested layout from silently reverting to left-to-right.
+    fun column(self, x: i32, y: i32, width: i32, height: i32, padding: i32, gap: i32) -> EqoiLayout:
+        layout: EqoiLayout = EqoiLayout.column(x, y, width, height, padding, gap)
+        layout.set_rtl(self.is_rtl())
+        return layout
+
+    fun row(self, x: i32, y: i32, width: i32, height: i32, padding: i32, gap: i32) -> EqoiLayout:
+        layout: EqoiLayout = EqoiLayout.row(x, y, width, height, padding, gap)
+        layout.set_rtl(self.is_rtl())
+        return layout
+
+    fun grid(self, x: i32, y: i32, width: i32, height: i32, padding: i32, gap: i32, columns: i32) -> EqoiLayout:
+        layout: EqoiLayout = EqoiLayout.grid(x, y, width, height, padding, gap, columns)
+        layout.set_rtl(self.is_rtl())
+        return layout
+
+    fun column_in(self, rect: UIRect, padding: i32, gap: i32) -> EqoiLayout:
+        layout: EqoiLayout = EqoiLayout.column_in(rect, padding, gap)
+        layout.set_rtl(self.is_rtl())
+        return layout
+
+    fun row_in(self, rect: UIRect, padding: i32, gap: i32) -> EqoiLayout:
+        layout: EqoiLayout = EqoiLayout.row_in(rect, padding, gap)
+        layout.set_rtl(self.is_rtl())
+        return layout
+
+    fun grid_in(self, rect: UIRect, padding: i32, gap: i32, columns: i32) -> EqoiLayout:
+        layout: EqoiLayout = EqoiLayout.grid_in(rect, padding, gap, columns)
+        layout.set_rtl(self.is_rtl())
+        return layout
+
+    # ---------------------------------------------------------------
+    # Text placed inside a rectangle
+    # ---------------------------------------------------------------
+    # The x-only text calls draw from the point given, which is right in
+    # either direction when the caller knows where the text starts. A label
+    # filling a row does not: its start is the reading edge, and that edge
+    # moves. These take the rectangle the layout produced and align to it.
+    fun text_in(self, rect: UIRect, value: str, color: UIColor):
+        width: i32 = rect.right - rect.left
+        left: i32 = self.mirror_x(rect.left, width, rect.left, self.text_width(value))
+        self.text(left, rect.top, value, color)
+
+    fun label_in(self, rect: UIRect, value: str):
+        self.text_in(rect, value, self.theme.text)
+
+    fun muted_label_in(self, rect: UIRect, value: str):
+        self.text_in(rect, value, self.theme.muted_text)
+
+    # A title carries an underline, which starts at the same edge the text
+    # does and runs the same way.
+    fun title_in(self, rect: UIRect, value: str):
+        width: i32 = rect.right - rect.left
+        rule: i32 = 260
+        if rule > width:
+            rule = width
+        left: i32 = self.mirror_x(rect.left, width, rect.left, self.text_width(value))
+        rule_left: i32 = self.mirror_x(rect.left, width, rect.left, rule)
+        commands: UIDrawList = self.commands
+        commands.push_text(left, rect.top, value, self.theme.text)
+        commands.push_line(rule_left, rect.top + 24, rule_left + rule, rect.top + 24, self.theme.accent, 2)
+        self.push_commands(commands)
+
+    # A separator spans its rectangle, so it needs no mirroring; it is here
+    # so a caller can write the whole page against rectangles.
+    fun separator_in(self, rect: UIRect):
+        self.separator(rect.left, rect.top, rect.right - rect.left)

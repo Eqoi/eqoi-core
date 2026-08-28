@@ -32,6 +32,12 @@ struct EqoiApp:
     hover_seen: i32 = 0
     frame_counter: i32 = 0
 
+    # ---- Reading direction ----
+    # Set once for the application. Layouts the app hands out carry it, and
+    # widgets that have a side — a checkbox box, a scrollbar, a chevron —
+    # mirror themselves.
+    direction: i32 = EQOI_DIR_LTR
+
     # ---- Identity stack (see identity.dlt) ----
     id_stack: i64 = 0
     id_seqs: i64 = 0

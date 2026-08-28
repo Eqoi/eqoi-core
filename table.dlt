@@ -50,6 +50,14 @@ attach EqoiApp:
             return 0
         return Memory.read_i32(self.tb_col_widths + (index as i64) * 4)
 
+    # Screen position of a column, which is where the mirroring happens: the
+    # offsets stay in reading order and only the mapping to pixels turns over.
+    fun _table_column_left(self, index: i32) -> i32:
+        offset: i32 = self._table_col_offset(index)
+        if self.is_rtl() == 1:
+            return self.tb_x + self.tb_w - offset - self._table_col_width(index)
+        return self.tb_x + offset
+
     # Left edge of a column, relative to the table's content origin.
     fun _table_col_offset(self, index: i32) -> i32:
         offset: i32 = 0
@@ -120,8 +128,7 @@ attach EqoiApp:
         index: i32 = self.tb_col_count
         self.tb_col_count = self.tb_col_count + 1
 
-        left: i32 = self.tb_col_cursor
-        self.tb_col_cursor = left + w
+        left: i32 = self._table_column_left(index)
 
         mouse: UIMouseState = self.input_state.mouse
         hovered: i32 = mouse.is_over_xy(left, self.tb_y, w, self.tb_header_h)
@@ -209,7 +216,10 @@ attach EqoiApp:
         self.tb_first = first
         self.tb_last = last
 
-        self.push_clip(self.tb_x + 1, self.tb_y + self.tb_header_h + 1, self.tb_w - 14, body_h - 2)
+        body_x: i32 = self.tb_x + 1
+        if self.is_rtl() == 1:
+            body_x = self.tb_x + 13
+        self.push_clip(body_x, self.tb_y + self.tb_header_h + 1, self.tb_w - 14, body_h - 2)
 
     # The half-open range the application should iterate. last is inclusive
     # and is -1 when nothing is on screen, so the loop simply does not run.
@@ -267,7 +277,7 @@ attach EqoiApp:
     fun table_cell(self, column: i32, value: str):
         if column < 0 or column >= self.tb_col_count:
             return
-        left: i32 = self.tb_x + self._table_col_offset(column)
+        left: i32 = self._table_column_left(column)
         w: i32 = self._table_col_width(column)
         color: UIColor = self.theme.text
         selected: i32 = -1
@@ -287,8 +297,11 @@ attach EqoiApp:
     fun table_end(self) -> i32:
         self.pop_clip()
         body_h: i32 = self._table_body_height()
+        bar_x: i32 = self.tb_x + self.tb_w - 12
+        if self.is_rtl() == 1:
+            bar_x = self.tb_x
         self.scrollbar_vertical_area(
-            self.tb_x + self.tb_w - 12,
+            bar_x,
             self.tb_y + self.tb_header_h,
             body_h,
             body_h,

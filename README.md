@@ -9,7 +9,7 @@ On Linux the public API is display-server neutral. The shared `window` adapter
 uses native Wayland/xdg-shell when available and falls back to X11/XWayland;
 Eqoi does not contain display-server-specific rendering or input code.
 
-Current version: **0.16.0**
+Current version: **0.17.0**
 
 ```text
 Eqoi application
@@ -205,6 +205,48 @@ app.use_font(face)
 
 `examples/arabic.dlt` is a working application that does exactly this and
 prepares nothing itself.
+
+## Reading direction
+
+A right-to-left interface is not right-aligned text. The whole surface turns
+over, and one call does it:
+
+```dolet
+app.use_rtl()
+```
+
+Rows fill from the right, a checkbox puts its box on the right with the label
+running away from it, a slider fills from the right, tabs run the other way,
+table columns start on the right, and the scrollbar moves to the left edge.
+
+Two things carry it. **Layout**: every rectangle is mirrored inside its
+layout's bounds, so rows, columns and grids all flow the other way from one
+transform rather than a direction test in every calculation. **Widgets**: a
+widget with a side asks `mirror_x` for it; a symmetric one — a button, a
+panel, a progress bar — needs nothing, which is most of them.
+
+Build layouts through the app so nested ones stay consistent:
+
+```dolet
+page: EqoiLayout = app.column(x, y, w, h, padding, gap)
+row: EqoiLayout = app.row_in(slot, 0, 12)
+```
+
+`EqoiLayout.column(...)` still builds a left-to-right layout, so the direction
+travels with the application rather than leaking globally.
+
+For text that fills a row, the reading edge moves with the direction, so pass
+the rectangle instead of a point:
+
+```dolet
+app.label_in(rect, "السلام عليكم")
+app.title_in(rect, "العنوان")
+```
+
+**Not yet here.** A caret in right-to-left text is positioned by the width of
+the logical prefix, which is correct left-to-right and approximate otherwise:
+editing Arabic needs the caret mapped through the display order, and that is
+not written.
 
 ## Widget identity
 

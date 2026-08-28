@@ -130,8 +130,14 @@ attach EqoiApp:
         box: i32 = 16
         id: i64 = self.widget_id(100, x, y)
         focused: i32 = self.register_focusable(id)
+        # Reading right to left, the box sits on the right with the label
+        # running away from it, which is the same relationship mirrored.
+        label_w: i32 = self.text_width(label)
+        span: i32 = box + 8 + label_w
+        box_x: i32 = self.mirror_x(x, span, x, box)
+        label_x: i32 = self.mirror_x(x, span, x + box + 8, label_w)
         mouse: UIMouseState = self.input_state.mouse
-        hovered: i32 = mouse.is_over_xy(x, y, box, box)
+        hovered: i32 = mouse.is_over_xy(box_x, y, box, box)
         if hovered == 1:
             self.set_hover(id)
 
@@ -145,20 +151,19 @@ attach EqoiApp:
         fill: UIColor = self.mix_colors(self.theme.surface, on_fill, checked_t)
         off_border: UIColor = self.mix_colors(self.theme.border, self.theme.text, hover_t)
         border: UIColor = self.mix_colors(off_border, on_fill, checked_t)
-        commands.push_fill_rect(x, y, box, box, fill)
-        commands.push_outline_rect(x, y, box, box, border, self.theme.border_width)
+        commands.push_fill_rect(box_x, y, box, box, fill)
+        commands.push_outline_rect(box_x, y, box, box, border, self.theme.border_width)
 
         # Checkmark appears once the box is more filled than not, so it lands
         # with the colour rather than snapping ahead of it.
         if checked_t > 50:
-            commands.push_line(x + 3, y + 8, x + 7, y + 12, self.theme.text, 2)
-            commands.push_line(x + 7, y + 12, x + 13, y + 4, self.theme.text, 2)
+            commands.push_line(box_x + 3, y + 8, box_x + 7, y + 12, self.theme.text, 2)
+            commands.push_line(box_x + 7, y + 12, box_x + 13, y + 4, self.theme.text, 2)
 
-        # Label to the right
-        commands.push_text(x + box + 8, y + (box - self.text_height()) / 2, label, self.theme.text)
+        commands.push_text(label_x, y + (box - self.text_height()) / 2, label, self.theme.text)
         self.push_commands(commands)
         if focused == 1:
-            self.focus_ring(x, y, box, box)
+            self.focus_ring(box_x, y, box, box)
 
         activated: i32 = 0
         if hovered == 1 and mouse.left_pressed() == 1:
@@ -182,8 +187,12 @@ attach EqoiApp:
         h: i32 = 20
         id: i64 = self.widget_id(101, x, y)
         focused: i32 = self.register_focusable(id)
+        toggle_label_w: i32 = self.text_width(label)
+        toggle_span: i32 = w + 8 + toggle_label_w
+        track_x: i32 = self.mirror_x(x, toggle_span, x, w)
+        toggle_label_x: i32 = self.mirror_x(x, toggle_span, x + w + 8, toggle_label_w)
         mouse: UIMouseState = self.input_state.mouse
-        hovered: i32 = mouse.is_over_xy(x, y, w, h)
+        hovered: i32 = mouse.is_over_xy(track_x, y, w, h)
         if hovered == 1:
             self.set_hover(id)
 
@@ -196,19 +205,22 @@ attach EqoiApp:
         track_color: UIColor = self.mix_colors(off_track, on_track, slide)
 
         commands: UIDrawList = self.commands
-        commands.push_fill_rounded_rect(x, y, w, h, h / 2, track_color)
-        # Knob: white circle that slides between left and right ends
+        commands.push_fill_rounded_rect(track_x, y, w, h, h / 2, track_color)
+        # The knob travels from the resting end to the active one, and which
+        # end is which turns over with the reading direction.
         knob_r: i32 = (h / 2) - 3
         cy: i32 = y + h / 2
-        left_cx: i32 = x + h / 2
-        right_cx: i32 = x + w - h / 2
-        cx: i32 = left_cx + ((right_cx - left_cx) * slide) / 100
+        from_cx: i32 = track_x + h / 2
+        to_cx: i32 = track_x + w - h / 2
+        if self.is_rtl() == 1:
+            from_cx = track_x + w - h / 2
+            to_cx = track_x + h / 2
+        cx: i32 = from_cx + ((to_cx - from_cx) * slide) / 100
         commands.push_fill_circle(cx, cy, knob_r, self.theme.text)
-        # Label to the right
-        commands.push_text(x + w + 8, y + (h - self.text_height()) / 2, label, self.theme.text)
+        commands.push_text(toggle_label_x, y + (h - self.text_height()) / 2, label, self.theme.text)
         self.push_commands(commands)
         if focused == 1:
-            self.focus_ring(x, y, w, h)
+            self.focus_ring(track_x, y, w, h)
 
         activated: i32 = 0
         if hovered == 1 and mouse.left_pressed() == 1:
@@ -269,6 +281,8 @@ attach EqoiApp:
         # While we own the drag, recompute value from current mouse x
         if self.drag_id == id and self.input_state.mouse.left_down == 1:
             rel: i32 = self.input_state.mouse.x - x
+            if self.is_rtl() == 1:
+                rel = x + width - self.input_state.mouse.x
             if rel < 0:
                 rel = 0
             if rel > width:
@@ -289,14 +303,17 @@ attach EqoiApp:
         track_y: i32 = y + (h - track_h) / 2
         # Track background
         commands.push_fill_rounded_rect(x, track_y, width, track_h, track_h / 2, self.theme.surface)
-        # Active portion
+        # The filled portion grows from the end the reader starts at.
         fill_w: i32 = 0
         if max_v > min_v:
             fill_w = ((v - min_v) * width) / (max_v - min_v)
-        if fill_w > 0:
-            commands.push_fill_rounded_rect(x, track_y, fill_w, track_h, track_h / 2, self.theme.accent)
-        # Knob — single solid circle, no extra outline ring
+        fill_x: i32 = x
         knob_x: i32 = x + fill_w
+        if self.is_rtl() == 1:
+            fill_x = x + width - fill_w
+            knob_x = x + width - fill_w
+        if fill_w > 0:
+            commands.push_fill_rounded_rect(fill_x, track_y, fill_w, track_h, track_h / 2, self.theme.accent)
         knob_r: i32 = h / 2 - 2
         engaged: i32 = 0
         if hovered == 1 or self.drag_id == id:
@@ -559,12 +576,19 @@ attach EqoiApp:
         self.sr_h = height
         self.sr_content_h = content_h
         self.sr_scroll_ptr = scroll_ptr
-        # Clip content to the inner area (minus scrollbar column).
-        self.push_clip(x + 1, y + 1, width - 14, height - 2)
+        # Clip content to the inner area, less the scrollbar column, which
+        # sits on the edge the reader's eye returns to.
+        content_x: i32 = x + 1
+        if self.is_rtl() == 1:
+            content_x = x + 13
+        self.push_clip(content_x, y + 1, width - 14, height - 2)
 
     fun scrollable_end(self):
         self.pop_clip()
-        self.scrollbar_vertical_area(self.sr_x + self.sr_w - 12, self.sr_y, self.sr_h, self.sr_h, self.sr_content_h, self.sr_scroll_ptr, self.sr_x, self.sr_y, self.sr_w, self.sr_h)
+        bar_x: i32 = self.sr_x + self.sr_w - 12
+        if self.is_rtl() == 1:
+            bar_x = self.sr_x
+        self.scrollbar_vertical_area(bar_x, self.sr_y, self.sr_h, self.sr_h, self.sr_content_h, self.sr_scroll_ptr, self.sr_x, self.sr_y, self.sr_w, self.sr_h)
 
     # ---------------------------------------------------------------
     # Tab bar — begin/item/end. Items rendered left-to-right with the
@@ -577,6 +601,8 @@ attach EqoiApp:
         self.tab_h = height
         self.tab_idx = 0
         self.tab_cursor_x = x
+        if self.is_rtl() == 1:
+            self.tab_cursor_x = x + width
         self.tab_active_ptr = active_ptr
         self.tab_changed = 0
         self.tab_scope = self.widget_id(131, x, y)
@@ -598,9 +624,12 @@ attach EqoiApp:
         id: i64 = self.widget_id(130, self.tab_cursor_x, self.tab_y)
         self.pop_id()
         self.pop_id()
+        item_x: i32 = self.tab_cursor_x
+        if self.is_rtl() == 1:
+            item_x = self.tab_cursor_x - item_width
         focused: i32 = self.register_focusable(id)
         mouse: UIMouseState = self.input_state.mouse
-        hovered: i32 = mouse.is_over_xy(self.tab_cursor_x, self.tab_y, item_width, self.tab_h)
+        hovered: i32 = mouse.is_over_xy(item_x, self.tab_y, item_width, self.tab_h)
         if hovered == 1:
             self.set_hover(id)
 
@@ -609,16 +638,16 @@ attach EqoiApp:
         if is_active == 1 or hovered == 1:
             text_color = self.theme.text
         label_w: i32 = self.text_width(label)
-        commands.push_text(self.tab_cursor_x + (item_width - label_w) / 2, self.tab_y + (self.tab_h - self.text_height()) / 2, label, text_color)
+        commands.push_text(item_x + (item_width - label_w) / 2, self.tab_y + (self.tab_h - self.text_height()) / 2, label, text_color)
         # The underline grows from the centre, so switching tabs reads as one
         # indicator moving rather than two blinking.
         under_t: i32 = self.anim(self.mix_id(id, 3), is_active * 100, 800)
         if under_t > 0:
             under_w: i32 = (item_width * under_t) / 100
-            commands.push_fill_rect(self.tab_cursor_x + (item_width - under_w) / 2, self.tab_y + self.tab_h - 3, under_w, 3, self.theme.accent)
+            commands.push_fill_rect(item_x + (item_width - under_w) / 2, self.tab_y + self.tab_h - 3, under_w, 3, self.theme.accent)
         self.push_commands(commands)
         if focused == 1:
-            self.focus_ring(self.tab_cursor_x, self.tab_y, item_width, self.tab_h)
+            self.focus_ring(item_x, self.tab_y, item_width, self.tab_h)
 
         changed: i32 = 0
         picked: i32 = 0
@@ -633,7 +662,10 @@ attach EqoiApp:
             changed = 1
 
         self.tab_idx = self.tab_idx + 1
-        self.tab_cursor_x = self.tab_cursor_x + item_width
+        if self.is_rtl() == 1:
+            self.tab_cursor_x = self.tab_cursor_x - item_width
+        else:
+            self.tab_cursor_x = self.tab_cursor_x + item_width
         return changed
 
     fun tab_bar_end(self) -> i32:
@@ -689,8 +721,9 @@ attach EqoiApp:
             fill = self.theme.surface_hover
         commands.push_fill_rect(x, y, width, height, fill)
         commands.push_outline_rect(x, y, width, height, self.theme.border, self.theme.border_width)
-        commands.push_text(x + 10, y + (height - self.text_height()) / 2, selected_label, self.theme.text)
-        chev_cx: i32 = x + width - 10
+        label_left: i32 = self.mirror_x(x, width, x + 10, self.text_width(selected_label))
+        commands.push_text(label_left, y + (height - self.text_height()) / 2, selected_label, self.theme.text)
+        chev_cx: i32 = self.mirror_x(x, width, x + width - 14, 8) + 4
         chev_cy: i32 = y + height / 2
         commands.push_line(chev_cx - 4, chev_cy - 2, chev_cx,     chev_cy + 2, self.theme.muted_text, 1)
         commands.push_line(chev_cx,     chev_cy + 2, chev_cx + 4, chev_cy - 2, self.theme.muted_text, 1)
@@ -724,7 +757,8 @@ attach EqoiApp:
         elif selected == 1:
             fill = self.theme.surface_active
         commands.push_fill_rect(self.dd_x, item_y, self.dd_w, self.dd_h, fill)
-        commands.push_text(self.dd_x + 10, item_y + (self.dd_h - self.text_height()) / 2, label, self.theme.text)
+        item_left: i32 = self.mirror_x(self.dd_x, self.dd_w, self.dd_x + 10, self.text_width(label))
+        commands.push_text(item_left, item_y + (self.dd_h - self.text_height()) / 2, label, self.theme.text)
         self.push_commands(commands)
 
         picked: i32 = 0

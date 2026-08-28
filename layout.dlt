@@ -25,6 +25,9 @@ EQOI_LAYOUT_COLUMN: i32 = 1
 EQOI_LAYOUT_ROW:    i32 = 2
 EQOI_LAYOUT_GRID:   i32 = 3
 
+EQOI_DIR_LTR: i32 = 0
+EQOI_DIR_RTL: i32 = 1
+
 EQOI_ALIGN_START:   i32 = 0
 EQOI_ALIGN_CENTER:  i32 = 1
 EQOI_ALIGN_END:     i32 = 2
@@ -67,6 +70,13 @@ struct EqoiLayout:
 
     # Main-axis extent consumed so far, for sizing a parent to its content.
     used_main: i32 = 0
+
+    # Right-to-left. Every rectangle the layout hands back is mirrored inside
+    # the layout's own bounds, which is all a direction change amounts to: a
+    # row fills from the right, a column's narrow items sit against the right
+    # edge, and a grid flows right to left. One transform, applied once, in
+    # place of a direction test in every size and position calculation.
+    rtl: i32 = 0
 
 attach EqoiLayout:
     static fun column(x: i32, y: i32, width: i32, height: i32, padding: i32, gap: i32) -> EqoiLayout:
@@ -118,12 +128,23 @@ attach EqoiLayout:
         self.columns = 0
         self.cell = 0
         self.used_main = 0
+        self.rtl = 0
         self.cursor_x = x + padding
         self.cursor_y = y + padding
 
     # ---------------------------------------------------------------
     # Configuration
     # ---------------------------------------------------------------
+    fun set_rtl(self, enabled: i32):
+        self.rtl = enabled
+
+    # Flip a rectangle horizontally inside the layout bounds.
+    fun mirror(self, rect: UIRect) -> UIRect:
+        if self.rtl == 0:
+            return rect
+        left: i32 = self.x + self.width - (rect.right - self.x)
+        return ui_make_rect(left, rect.top, rect.right - rect.left, rect.bottom - rect.top)
+
     # Where an item sits on the cross axis when it gives an explicit cross
     # size. STRETCH ignores the requested size and fills, which is what a
     # non-positive cross size already does.
@@ -306,6 +327,7 @@ attach EqoiLayout:
             rect = ui_make_rect(self.cursor_x + margin + cross_offset, self.cursor_y + margin, cross, main)
             self.cursor_y = self.cursor_y + main + slot_extra + self.gap
 
+        rect = self.mirror(rect)
         advance: i32 = main + slot_extra
         if self.used_main > 0:
             self.used_main = self.used_main + self.gap + advance
@@ -388,7 +410,7 @@ attach EqoiLayout:
         self.used_main = rows_used * h + (rows_used - 1) * self.gap
         if self.used_main < 0:
             self.used_main = 0
-        return ui_make_rect(left, top, span_w, h)
+        return self.mirror(ui_make_rect(left, top, span_w, h))
 
     # Advance the cursor without producing a rectangle.
     fun skip(self, main_size: i32):

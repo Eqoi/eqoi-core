@@ -17,6 +17,10 @@ fun main() -> i32:
     if app.is_valid() == 0:
         return 1
 
+    # One call turns the interface over: rows fill from the right, the
+    # checkbox puts its box on the right, the slider fills from the right.
+    app.use_rtl()
+
     face: FontFace = font_face_load_ttf(FONT_PATH, 22)
     loaded: i32 = face.is_valid()
     if loaded == 1:
@@ -29,29 +33,31 @@ fun main() -> i32:
 
     while app.running() == 1:
         if app.begin() == 1:
-            page: EqoiLayout = EqoiLayout.column(24, 20, app.width - 48, app.height - 40, 0, 14)
+            # app.column carries the direction, so nested layouts stay
+            # consistent without repeating it.
+            page: EqoiLayout = app.column(24, 20, app.width - 48, app.height - 40, 0, 14)
 
             head: UIRect = page.next(0, 28)
-            app.title(head.left, head.top, "العربية في واجهات Eqoi")
+            app.title_in(head, "العربية في واجهات Eqoi")
             if loaded == 0:
                 app.text(24, 60, "Could not load the system font.", app.theme.danger)
             else:
                 lede: UIRect = page.next(0, 20)
-                app.muted_label(lede.left, lede.top, "لا شيء في هذا المثال يحضّر النص. التطبيق يكتب ما يقصده.")
+                app.muted_label_in(lede, "لا شيء في هذا المثال يحضّر النص. التطبيق يكتب ما يقصده.")
             page.skip(6)
 
             # Plain labels, including one that mixes scripts and numbers.
             l1: UIRect = page.next(0, 22)
-            app.label(l1.left, l1.top, "السلام عليكم ورحمة الله وبركاته")
+            app.label_in(l1, "السلام عليكم ورحمة الله وبركاته")
             l2: UIRect = page.next(0, 22)
-            app.label(l2.left, l2.top, "لا اله الا الله")
+            app.label_in(l2, "لا اله الا الله")
             l3: UIRect = page.next(0, 22)
-            app.label(l3.left, l3.top, "الإصدار 0.16 من مكتبة eqoi صدر سنة 2026")
+            app.label_in(l3, "الإصدار 0.16 من مكتبة eqoi صدر سنة 2026")
             page.skip(8)
 
             # Widgets, with Arabic labels.
             buttons: UIRect = page.next(0, 42)
-            row: EqoiLayout = EqoiLayout.row_in(buttons, 0, 12)
+            row: EqoiLayout = app.row_in(buttons, 0, 12)
             row.flex(3, 2)
             first: UIRect = row.next_flex(2)
             second: UIRect = row.next_flex(1)
@@ -62,28 +68,28 @@ fun main() -> i32:
 
             counted: i32 = app.get_int(clicks)
             tally: UIRect = page.next(0, 22)
-            app.muted_label(tally.left, tally.top, @"عدد الضغطات: {counted}")
+            app.muted_label_in(tally, @"عدد الضغطات: {counted}")
 
             checkbox_row: UIRect = page.next(0, 26)
-            app.checkbox(checkbox_row.left, checkbox_row.top, "أوافق على الشروط", agree)
+            app.checkbox(app.mirror_x(checkbox_row.left, checkbox_row.right - checkbox_row.left, checkbox_row.left, 16 + 8 + app.text_width("أوافق على الشروط")), checkbox_row.top, "أوافق على الشروط", agree)
             page.skip(4)
 
             lvl: UIRect = page.next(0, 20)
-            app.muted_label(lvl.left, lvl.top, "المستوى")
+            app.muted_label_in(lvl, "المستوى")
             slider_row: UIRect = page.next(0, 26)
-            app.slider(slider_row.left, slider_row.top, 420, 0, 100, level)
+            app.slider(app.mirror_x(slider_row.left, slider_row.right - slider_row.left, slider_row.left, 420), slider_row.top, 420, 0, 100, level)
             page.skip(6)
 
             nm: UIRect = page.next(0, 20)
-            app.muted_label(nm.left, nm.top, "الاسم")
+            app.muted_label_in(nm, "الاسم")
             field: UIRect = page.next(0, 34)
-            app.text_input(field.left, field.top, 420, 34, name, 79)
+            app.text_input(app.mirror_x(field.left, field.right - field.left, field.left, 420), field.top, 420, 34, name, 79)
 
             page.skip(10)
             rule: UIRect = page.next(0, 1)
-            app.separator(rule.left, rule.top, app.width - 48)
+            app.separator_in(rule)
             tail: UIRect = page.next(0, 20)
-            app.muted_label(tail.left, tail.top, "Latin text still measures and draws exactly as before.")
+            app.muted_label_in(tail, "Latin still measures and draws exactly as before.")
             app.end()
 
     app.destroy()

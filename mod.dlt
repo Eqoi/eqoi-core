@@ -14,6 +14,7 @@ load eqoi/theme
 load eqoi/layout
 load eqoi/app
 load eqoi/identity
+load eqoi/direction
 load eqoi/focus
 load eqoi/textedit
 load eqoi/table
@@ -27,6 +28,8 @@ export EqoiApp
 export EQOI_LAYOUT_COLUMN
 export EQOI_LAYOUT_ROW
 export EQOI_LAYOUT_GRID
+export EQOI_DIR_LTR
+export EQOI_DIR_RTL
 export EQOI_ALIGN_START
 export EQOI_ALIGN_CENTER
 export EQOI_ALIGN_END

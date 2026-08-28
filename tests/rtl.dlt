@@ -1,0 +1,233 @@
+import eqoi
+
+# Right-to-left. A mirrored interface is not right-aligned text: rows fill
+# from the right, a checkbox puts its box on the right, a slider fills from
+# the right, tabs run the other way and the scrollbar changes edge.
+#
+# Every expected coordinate is worked out by hand from the mirror rule:
+#
+#     mirrored_left = layout.x + layout.width - (rect.right - layout.x)
+
+fun main() -> i32:
+    app: EqoiApp = EqoiApp.headless(600, 400)
+    if app.is_valid() == 0:
+        print("eqoi rtl: headless app creation failed")
+        return 1
+
+    # ---------------------------------------------------------------
+    # Left to right is the default and is untouched.
+    # ---------------------------------------------------------------
+    if app.is_rtl() != 0:
+        print("eqoi rtl: a fresh app is not left to right")
+        app.destroy()
+        return 2
+    ltr: EqoiLayout = app.row(0, 0, 300, 100, 10, 10)
+    first_ltr: UIRect = ltr.next(50, 0)
+    if first_ltr.left != 10 or first_ltr.right != 60:
+        print("eqoi rtl: the left-to-right row moved")
+        app.destroy()
+        return 3
+
+    app.use_rtl()
+    if app.is_rtl() != 1:
+        print("eqoi rtl: the app did not switch direction")
+        app.destroy()
+        return 4
+
+    # ---------------------------------------------------------------
+    # A row fills from the right, flowing leftwards.
+    # ---------------------------------------------------------------
+    r: EqoiLayout = app.row(0, 0, 300, 100, 10, 10)
+    a: UIRect = r.next(50, 0)
+    b: UIRect = r.next(50, 0)
+    if a.left != 240 or a.right != 290:
+        print("eqoi rtl: the first item is not against the right edge")
+        app.destroy()
+        return 5
+    if b.left != 180 or b.right != 230:
+        print("eqoi rtl: the row did not flow leftwards")
+        app.destroy()
+        return 6
+
+    # ---------------------------------------------------------------
+    # In a column a narrow item sits against the right edge, and one that
+    # fills the width is unchanged by mirroring.
+    # ---------------------------------------------------------------
+    c: EqoiLayout = app.column(0, 0, 200, 300, 10, 5)
+    narrow: UIRect = c.next(50, 20)
+    wide: UIRect = c.next(0, 20)
+    if narrow.left != 140 or narrow.right != 190:
+        print("eqoi rtl: a narrow column item is not against the right edge")
+        app.destroy()
+        return 7
+    if wide.left != 10 or wide.right != 190:
+        print("eqoi rtl: a full-width item was moved by mirroring")
+        app.destroy()
+        return 8
+
+    # ---------------------------------------------------------------
+    # A grid flows right to left.
+    # ---------------------------------------------------------------
+    g: EqoiLayout = app.grid(0, 0, 320, 240, 10, 10, 3)
+    cell0: UIRect = g.next_cell(30)
+    cell1: UIRect = g.next_cell(30)
+    if cell0.left != 217 or cell0.right != 310:
+        print("eqoi rtl: the first grid cell is not on the right")
+        app.destroy()
+        return 9
+    if cell1.left != 114:
+        print("eqoi rtl: the grid did not flow leftwards")
+        app.destroy()
+        return 10
+
+    # A layout built with the bare constructor stays left to right, so the
+    # direction travels with the application rather than leaking globally.
+    plain: EqoiLayout = EqoiLayout.row(0, 0, 300, 100, 10, 10)
+    if plain.next(50, 0).left != 10:
+        print("eqoi rtl: direction leaked into a standalone layout")
+        app.destroy()
+        return 11
+
+    # ---------------------------------------------------------------
+    # A checkbox puts its box on the right of its own span.
+    # ---------------------------------------------------------------
+    checked: i64 = app.alloc_bool(0)
+    label: str = "Enable"
+    span: i32 = 16 + 8 + app.text_width(label)
+    box_left: i32 = 40 + span - 16
+
+    # A press on the left of the span, where the label now is, must not flip.
+    app.inject_mouse_move(44, 108)
+    app.inject_left_down()
+    if app.begin_offscreen() == 1:
+        app.checkbox(40, 100, label, checked)
+        app.end()
+    if app.get_bool(checked) != 0:
+        print("eqoi rtl: the checkbox box is still on the left")
+        app.destroy()
+        return 12
+    app.inject_left_up()
+    if app.begin_offscreen() == 1:
+        app.checkbox(40, 100, label, checked)
+        app.end()
+
+    # A press on the box itself does flip it.
+    app.inject_mouse_move(box_left + 8, 108)
+    app.inject_left_down()
+    if app.begin_offscreen() == 1:
+        app.checkbox(40, 100, label, checked)
+        app.end()
+    if app.get_bool(checked) != 1:
+        print("eqoi rtl: the checkbox box is not on the right")
+        app.destroy()
+        return 13
+    app.inject_left_up()
+    if app.begin_offscreen() == 1:
+        app.end()
+
+    # ---------------------------------------------------------------
+    # A slider fills from the right, so the right end is the minimum.
+    # ---------------------------------------------------------------
+    volume: i64 = app.alloc_int(50)
+    app.inject_mouse_move(299, 205)
+    if app.begin_offscreen() == 1:
+        app.slider(100, 200, 200, 0, 100, volume)
+        app.end()
+    app.inject_left_down()
+    if app.begin_offscreen() == 1:
+        app.slider(100, 200, 200, 0, 100, volume)
+        app.end()
+    if app.get_int(volume) != 0:
+        print("eqoi rtl: the right end of the slider is not the minimum")
+        app.destroy()
+        return 14
+
+    app.inject_mouse_move(100, 205)
+    if app.begin_offscreen() == 1:
+        app.slider(100, 200, 200, 0, 100, volume)
+        app.end()
+    if app.get_int(volume) != 100:
+        print("eqoi rtl: the left end of the slider is not the maximum")
+        app.destroy()
+        return 15
+    app.inject_left_up()
+    if app.begin_offscreen() == 1:
+        app.end()
+
+    # ---------------------------------------------------------------
+    # Tabs run right to left.
+    # ---------------------------------------------------------------
+    active: i64 = app.alloc_int(0)
+    app.inject_mouse_move(150, 16)
+    app.inject_left_down()
+    if app.begin_offscreen() == 1:
+        app.tab_bar_begin(0, 0, 300, 32, active)
+        app.tab_bar_item("One", 100)
+        app.tab_bar_item("Two", 100)
+        app.tab_bar_item("Three", 100)
+        app.tab_bar_end()
+        app.end()
+    if app.get_int(active) != 1:
+        print("eqoi rtl: the middle tab is not in the middle")
+        app.destroy()
+        return 16
+    app.inject_left_up()
+    if app.begin_offscreen() == 1:
+        app.end()
+
+    # x = 250 is inside the FIRST tab, which now sits on the right.
+    app.inject_mouse_move(250, 16)
+    app.inject_left_down()
+    if app.begin_offscreen() == 1:
+        app.tab_bar_begin(0, 0, 300, 32, active)
+        app.tab_bar_item("One", 100)
+        app.tab_bar_item("Two", 100)
+        app.tab_bar_item("Three", 100)
+        app.tab_bar_end()
+        app.end()
+    if app.get_int(active) != 0:
+        print("eqoi rtl: the first tab is not on the right")
+        app.destroy()
+        return 17
+    app.inject_left_up()
+    if app.begin_offscreen() == 1:
+        app.end()
+
+    # ---------------------------------------------------------------
+    # Table columns run right to left too.
+    # A table at x=20 width=300 with columns 110 and 190 puts the first
+    # column at 20 + 300 - 0 - 110 = 210.
+    # ---------------------------------------------------------------
+    scroll: i64 = app.alloc_int(0)
+    selected: i64 = app.alloc_int(-1)
+    app.inject_mouse_move(250, 35)
+    app.inject_left_down()
+    sorted_by: i32 = -1
+    if app.begin_offscreen() == 1:
+        app.table_begin(20, 20, 300, 220, 26, 100, scroll, selected)
+        if app.table_column("Index", 110) == 1:
+            sorted_by = 0
+        if app.table_column("Name", 190) == 1:
+            sorted_by = 1
+        app.table_headers_end()
+        app.table_end()
+        app.end()
+    if sorted_by != 0:
+        print("eqoi rtl: the first table column is not on the right")
+        app.destroy()
+        return 18
+    app.inject_left_up()
+
+    # ---------------------------------------------------------------
+    # Switching back restores left-to-right behaviour exactly.
+    # ---------------------------------------------------------------
+    app.use_ltr()
+    back: EqoiLayout = app.row(0, 0, 300, 100, 10, 10)
+    if back.next(50, 0).left != 10:
+        print("eqoi rtl: switching back did not restore the direction")
+        app.destroy()
+        return 19
+
+    app.destroy()
+    print("eqoi rtl: ok")
+    return 0
