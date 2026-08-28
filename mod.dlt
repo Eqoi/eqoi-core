@@ -17,6 +17,7 @@ load eqoi/layout
 load eqoi/app
 load eqoi/identity
 load eqoi/direction
+load eqoi/scale
 load eqoi/focus
 load eqoi/textedit
 load eqoi/textmap

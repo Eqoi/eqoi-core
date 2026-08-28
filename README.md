@@ -9,7 +9,7 @@ On Linux the public API is display-server neutral. The shared `window` adapter
 uses native Wayland/xdg-shell when available and falls back to X11/XWayland;
 Eqoi does not contain display-server-specific rendering or input code.
 
-Current version: **0.19.0**
+Current version: **0.20.0**
 
 ```text
 Eqoi application
@@ -206,6 +206,37 @@ app.use_font(face)
 
 `examples/arabic.dlt` is a working application that does exactly this and
 prepares nothing itself.
+
+## Display scale
+
+An application writes one set of coordinates. A denser display needs
+everything larger. Reconciling those is the whole of display scaling, and
+there are exactly two honest places to do it: where a coordinate becomes a
+pixel, and where a pixel becomes a coordinate.
+
+Eqoi does it at both and nowhere else. Layout, widgets, hit testing and the
+whole application work in one set of units and never ask what the display is
+doing — **nothing above `scale.dlt` contains a scale factor.**
+
+```dolet
+app.set_scale_percent(200)          # or let it come from the window
+face: FontFace = font_face_load_ttf(path, app.font_pixels(16))
+```
+
+- `app.width`/`app.height` and pointer positions are **logical**; the surface
+  stays physical, at the resolution the window actually has.
+- Text metrics are reported logically too, because the face is built at the
+  physical size. Without that every centred label would drift by half the
+  scale factor.
+- A one-pixel border never rounds away to nothing at a fractional scale.
+- The built-in face is rebuilt at the new size. An application that supplied
+  its own face sizes it with `font_pixels`, and Eqoi stops rebuilding.
+
+**Where it comes from.** Windows reports the display's dots per inch and Eqoi
+adopts it before the first frame. The Linux backend does not yet listen for
+the Wayland output scale or read Xft.dpi, so it reports one to one rather
+than guessing — an application there sets the scale outright and everything
+else behaves identically.
 
 ## Controls
 

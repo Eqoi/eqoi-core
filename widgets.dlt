@@ -14,14 +14,18 @@ attach EqoiApp:
         commands.push_text(x, y, value, color)
         self.push_commands(commands)
 
+    # Text is measured through a face built at the physical size, and every
+    # widget places it in logical units, so these convert. Without it every
+    # centred label and every caret would sit at the wrong offset the moment
+    # the display was not at one-to-one.
     fun text_width(self, value: str) -> i32:
-        return self.surface.text_width(value)
+        return self.to_logical(self.surface.text_width(value))
 
     fun text_height(self) -> i32:
-        return self.surface.text_height()
+        return self.to_logical(self.surface.text_height())
 
     fun text_advance(self) -> i32:
-        return self.surface.font_advance
+        return self.to_logical(self.surface.font_advance)
 
     fun label(self, x: i32, y: i32, value: str):
         self.text(x, y, value, self.theme.text)

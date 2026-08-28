@@ -1,0 +1,72 @@
+# ============================
+#  Eqoi Display Scale
+# ============================
+# An application writes one set of coordinates. A display at twice the pixel
+# density needs everything at twice the size. Reconciling those is the whole
+# of display scaling, and there are exactly two honest places to do it:
+# where a coordinate becomes a pixel, and where a pixel becomes a coordinate.
+#
+#   drawing   the draw list multiplies on the way out
+#   input     the pointer is divided on the way in
+#   metrics   the window's size, and the font's, are reported logically
+#
+# Everything between those boundaries — layout, widgets, hit testing, the
+# whole application — works in one set of units and never asks what the
+# display is doing. Nothing above this file contains a scale factor.
+#
+# The scale is detected from the window where the platform can report it, and
+# can always be set outright: an application on a platform that does not yet
+# report it is not stuck.
+
+attach EqoiApp:
+    fun scale_percent(self) -> i32:
+        return self.display_scale
+
+    # Logical units to physical pixels.
+    fun to_physical(self, value: i32) -> i32:
+        if self.display_scale == 100:
+            return value
+        return (value * self.display_scale) / 100
+
+    # Physical pixels to logical units.
+    fun to_logical(self, value: i32) -> i32:
+        if self.display_scale == 100:
+            return value
+        return (value * 100) / self.display_scale
+
+    # The pixel height to build a font at for a logical text size. An
+    # application loading its own face needs this and nothing else.
+    fun font_pixels(self, logical_size: i32) -> i32:
+        return self.to_physical(logical_size)
+
+    fun set_scale_percent(self, percent: i32) -> i32:
+        value: i32 = percent
+        if value < 50:
+            value = 50
+        if value > 400:
+            value = 400
+        if value == self.display_scale:
+            return 1
+        self.display_scale = value
+        self.commands.set_scale(value)
+        # The built-in face has to be rebuilt at the new size, or text stays
+        # the one thing on screen that did not scale.
+        if self.uses_default_font == 1:
+            self.surface.use_default_font(self.to_physical(14))
+        self.sync_logical_size()
+        return 1
+
+    # Take the scale the platform reports, if it reports one.
+    fun adopt_display_scale(self) -> i32:
+        if self.is_headless == 1:
+            return 0
+        detected: i32 = window_scale_percent()
+        if detected <= 0:
+            return 0
+        return self.set_scale_percent(detected)
+
+    fun sync_logical_size(self):
+        self.width = self.to_logical(self.physical_width)
+        self.height = self.to_logical(self.physical_height)
+        self.canvas_w = self.width
+        self.canvas_h = self.height

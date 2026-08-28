@@ -1,0 +1,189 @@
+import eqoi
+
+# Display scaling. An application writes one set of coordinates; a denser
+# display needs everything larger. The conversion happens at two boundaries
+# and nowhere else, and these checks are on both.
+#
+# Offscreen, injected pointer positions are already logical, which is what a
+# test wants: it is asking about layout, not about the window system.
+
+fun main() -> i32:
+    # ---------------------------------------------------------------
+    # One to one is the default, and nothing is converted.
+    # ---------------------------------------------------------------
+    app: EqoiApp = EqoiApp.headless(400, 300)
+    if app.is_valid() == 0:
+        print("eqoi scale: headless app creation failed")
+        return 1
+    if app.scale_percent() != 100:
+        print("eqoi scale: a fresh app is not at one to one")
+        app.destroy()
+        return 2
+    if app.width != 400 or app.height != 300:
+        print("eqoi scale: the logical size is wrong at one to one")
+        app.destroy()
+        return 3
+    if app.to_physical(37) != 37 or app.to_logical(37) != 37:
+        print("eqoi scale: conversion is not the identity at one to one")
+        app.destroy()
+        return 4
+    base_text: i32 = app.text_width("Hello")
+    base_height: i32 = app.text_height()
+    app.destroy()
+
+    # ---------------------------------------------------------------
+    # At twice the density the surface is unchanged and the application's
+    # world is half the size, because its units grew.
+    # ---------------------------------------------------------------
+    a: EqoiApp = EqoiApp.headless(400, 300)
+    if a.set_scale_percent(200) == 0:
+        print("eqoi scale: could not set the scale")
+        a.destroy()
+        return 5
+    if a.scale_percent() != 200:
+        print("eqoi scale: the scale did not take")
+        a.destroy()
+        return 6
+    if a.width != 200 or a.height != 150:
+        print("eqoi scale: the logical size did not halve")
+        a.destroy()
+        return 7
+    if a.surface.width != 400 or a.surface.height != 300:
+        print("eqoi scale: the surface changed size, which it must not")
+        a.destroy()
+        return 8
+    if a.to_physical(50) != 100 or a.to_logical(100) != 50:
+        print("eqoi scale: conversion is wrong at two to one")
+        a.destroy()
+        return 9
+    if a.font_pixels(14) != 28:
+        print("eqoi scale: a font size was not scaled")
+        a.destroy()
+        return 10
+
+    # ---------------------------------------------------------------
+    # A rectangle asked for in logical units lands at twice the size.
+    # Logical (10, 10, 20, 20) is physical (20, 20) to (60, 60).
+    # ---------------------------------------------------------------
+    a.inject_mouse_move(190, 140)
+    if a.begin_offscreen() == 1:
+        a.rect(10, 10, 20, 20, a.theme.accent)
+        a.end()
+    if a.pixel_at(40, 40) != a.theme.accent:
+        print("eqoi scale: the rectangle did not grow with the scale")
+        a.destroy()
+        return 11
+    if a.pixel_at(15, 15) == a.theme.accent:
+        print("eqoi scale: the rectangle was drawn at logical coordinates")
+        a.destroy()
+        return 12
+    if a.pixel_at(70, 70) == a.theme.accent:
+        print("eqoi scale: the rectangle grew past its size")
+        a.destroy()
+        return 13
+    # These two points separate a scaled x from an unscaled one. Scaled, the
+    # rectangle spans 20..60; unscaled it would span 10..50, and each point
+    # is inside exactly one of those.
+    if a.pixel_at(55, 40) != a.theme.accent:
+        print("eqoi scale: the rectangle did not reach its scaled right edge")
+        a.destroy()
+        return 23
+    if a.pixel_at(15, 40) == a.theme.accent:
+        print("eqoi scale: the rectangle still starts at its unscaled left edge")
+        a.destroy()
+        return 24
+
+    # ---------------------------------------------------------------
+    # Text measures nearly the same in logical units, because the face grew
+    # with everything else. Without that, every centred label would drift by
+    # half the scale factor.
+    #
+    # Nearly, not exactly: the built-in bitmap face computes its advance per
+    # pixel height and 9 at 14px becomes 17 at 28px rather than 18. That is
+    # the font's integer metrics, not the scaling — a TrueType face lands
+    # much closer. A tenth is the honest bound.
+    # ---------------------------------------------------------------
+    scaled_text: i32 = a.text_width("Hello")
+    scaled_height: i32 = a.text_height()
+    if scaled_text * 10 < base_text * 9 or scaled_text * 9 > base_text * 10:
+        print("eqoi scale: text does not measure the same in logical units")
+        a.destroy()
+        return 14
+    if scaled_height * 10 < base_height * 9 or scaled_height * 9 > base_height * 10:
+        print("eqoi scale: line height does not match in logical units")
+        a.destroy()
+        return 15
+
+    # ---------------------------------------------------------------
+    # Layout and hit testing are untouched: a button placed in logical
+    # units is pressed at logical coordinates.
+    # ---------------------------------------------------------------
+    clicks: i32 = 0
+    a.inject_mouse_move(60, 60)
+    if a.begin_offscreen() == 1:
+        a.button(40, 40, 120, 40, "OK")
+        a.end()
+    a.inject_left_down()
+    if a.begin_offscreen() == 1:
+        clicks = a.button(40, 40, 120, 40, "OK")
+        a.end()
+    if clicks != 1:
+        print("eqoi scale: hit testing did not stay in logical units")
+        a.destroy()
+        return 16
+    a.inject_left_up()
+
+    # ---------------------------------------------------------------
+    # Going back restores everything.
+    # ---------------------------------------------------------------
+    a.set_scale_percent(100)
+    if a.width != 400 or a.height != 300:
+        print("eqoi scale: returning to one to one did not restore the size")
+        a.destroy()
+        return 17
+    if a.to_physical(50) != 50:
+        print("eqoi scale: conversion did not return to the identity")
+        a.destroy()
+        return 18
+
+    # Limits hold rather than producing a surface no one can use.
+    a.set_scale_percent(10000)
+    if a.scale_percent() != 400:
+        print("eqoi scale: an absurd scale was not clamped")
+        a.destroy()
+        return 19
+    a.set_scale_percent(1)
+    if a.scale_percent() != 50:
+        print("eqoi scale: a tiny scale was not clamped")
+        a.destroy()
+        return 20
+    a.destroy()
+
+    # ---------------------------------------------------------------
+    # A fractional scale still leaves a hairline border visible: a border
+    # of one logical pixel must not round away to nothing.
+    # ---------------------------------------------------------------
+    b: EqoiApp = EqoiApp.headless(400, 300)
+    b.set_scale_percent(150)
+    if b.width != 266:
+        print("eqoi scale: a fractional scale computed the wrong logical size")
+        b.destroy()
+        return 21
+    b.inject_mouse_move(390, 290)
+    if b.begin_offscreen() == 1:
+        b.outline(10, 10, 40, 40, b.theme.accent)
+        b.end()
+    found: i32 = 0
+    i: i32 = 0
+    while i < 80:
+        if b.pixel_at(15 + i, 15) == b.theme.accent:
+            found = 1
+        i = i + 1
+    if found != 1:
+        print("eqoi scale: a one-pixel border vanished at a fractional scale")
+        b.destroy()
+        return 22
+    b.destroy()
+
+    print("eqoi scale: ok")
+    return 0

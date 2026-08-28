@@ -75,7 +75,7 @@ attach EqoiApp:
     fun text_map_advance(self, visual: i32) -> i32:
         if visual < 0 or visual >= self.tm_display_count:
             return 0
-        return self.surface.codepoint_width(Memory.read_i32(self.tm_display + (visual as i64) * 4))
+        return self.to_logical(self.surface.codepoint_width(Memory.read_i32(self.tm_display + (visual as i64) * 4)))
 
     # Pixel offset of the left edge of a drawn glyph.
     fun text_map_offset(self, visual: i32) -> i32:

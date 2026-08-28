@@ -32,6 +32,13 @@ struct EqoiApp:
     hover_seen: i32 = 0
     frame_counter: i32 = 0
 
+    # ---- Display scale (see scale.dlt) ----
+    # width/height are LOGICAL; the surface is physical.
+    display_scale: i32 = 100
+    physical_width: i32 = 0
+    physical_height: i32 = 0
+    uses_default_font: i32 = 1
+
     # ---- Reading direction ----
     # Set once for the application. Layouts the app hands out carry it, and
     # widgets that have a side — a checkbox box, a scrollbar, a chevron —
@@ -222,6 +229,8 @@ attach EqoiApp:
         app.window_resized = 0
         app.window_focused = 1
         app.window_surface = 0
+        app.physical_width = width
+        app.physical_height = height
         app.width = width
         app.height = height
         app.canvas_w = width
@@ -230,6 +239,9 @@ attach EqoiApp:
         app.commands = commands
         app.surface = surface
         app.input_state = ui_input_create()
+        # Take whatever the platform says about the display before the first
+        # frame, so an application never draws once at the wrong size.
+        app.adopt_display_scale()
         return app
 
     # Offscreen twin of create(). Same surface, same command list, same frame
@@ -251,6 +263,8 @@ attach EqoiApp:
             return app
 
         app.is_headless = 1
+        app.physical_width = width
+        app.physical_height = height
         app.window_handle = 0
         app.window_should_close = 0
         app.window_focused = 1
@@ -273,6 +287,9 @@ attach EqoiApp:
     # Borrow a caller-owned face. Keep it alive until the app is destroyed or
     # another face is selected. Rendering remains owned by ui.
     fun use_font(self, face: FontFace) -> i32:
+        # The application owns this one, so Eqoi stops rebuilding a default
+        # at every scale change. Size it with font_pixels.
+        self.uses_default_font = 0
         return self.surface.use_font_face(face)
 
     fun destroy(self):
@@ -375,16 +392,15 @@ attach EqoiApp:
         old_height: i32 = self.height
         self.window_handle = Window.handle()
         self.window_hinstance = Window.hinstance()
-        self.width = Window.width()
-        self.height = Window.height()
-        self.canvas_w = self.width
-        self.canvas_h = self.height
+        self.physical_width = Window.width()
+        self.physical_height = Window.height()
+        self.sync_logical_size()
         self.window_should_close = Window.should_close()
         self.window_resized = 0
         if self.width != old_width or self.height != old_height:
             self.window_resized = 1
-            if self.width > 0 and self.height > 0:
-                self.surface.resize(self.width, self.height)
+            if self.physical_width > 0 and self.physical_height > 0:
+                self.surface.resize(self.physical_width, self.physical_height)
         self.window_focused = Window.focused()
         self.window_surface = 0
 
@@ -395,8 +411,8 @@ attach EqoiApp:
         point: UIPoint = UIPoint()
         window_client_mouse_position(self.window_handle, point as i64)
         self.input_state.begin_frame(
-            point.x,
-            point.y,
+            self.to_logical(point.x),
+            self.to_logical(point.y),
             mouse_pressed(MOUSE_LEFT),
             mouse_pressed(MOUSE_RIGHT),
             mouse_pressed(MOUSE_MIDDLE),
