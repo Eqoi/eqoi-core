@@ -7,6 +7,8 @@ import window
 import ui
 import input
 import fonts
+import text
+import unicode
 
 type UIColor = i32
 
@@ -17,6 +19,7 @@ load eqoi/identity
 load eqoi/direction
 load eqoi/focus
 load eqoi/textedit
+load eqoi/textmap
 load eqoi/table
 load eqoi/anim
 load eqoi/widgets

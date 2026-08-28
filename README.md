@@ -9,7 +9,7 @@ On Linux the public API is display-server neutral. The shared `window` adapter
 uses native Wayland/xdg-shell when available and falls back to X11/XWayland;
 Eqoi does not contain display-server-specific rendering or input code.
 
-Current version: **0.17.0**
+Current version: **0.18.0**
 
 ```text
 Eqoi application
@@ -243,10 +243,22 @@ app.label_in(rect, "السلام عليكم")
 app.title_in(rect, "العنوان")
 ```
 
-**Not yet here.** A caret in right-to-left text is positioned by the width of
-the logical prefix, which is correct left-to-right and approximate otherwise:
-editing Arabic needs the caret mapped through the display order, and that is
-not written.
+Text editing works in right-to-left too. A caret lives at a position in the
+text as stored and has to be drawn somewhere in the text as shown, and after
+shaping and reordering nothing arithmetic connects the two. Eqoi carries the
+correspondence: every drawn glyph remembers the character it came from and the
+direction it runs in.
+
+The caret sits on the **leading edge** of the character it precedes — the left
+side of a left-to-right glyph, the right side of a right-to-left one. That one
+rule is what makes a caret behave in mixed text: it walks leftwards through
+Arabic and rightwards through a Latin run in the same line, following the text
+rather than the pixels.
+
+Clicking maps back the same way, and a selection is painted as the visual runs
+it actually occupies: a Latin word inside an Arabic line is one run and the
+Arabic either side of it is another, which a single rectangle between two ends
+cannot express.
 
 ## Widget identity
 

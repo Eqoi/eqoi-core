@@ -1,0 +1,209 @@
+# ============================
+#  Eqoi Logical-to-Visual Text Mapping
+# ============================
+# A caret lives at a position in the text as stored. It has to be drawn
+# somewhere in the text as shown. Between the two sit shaping, which can turn
+# two characters into one glyph, and reordering, which can put the last
+# character first. After both, no arithmetic connects the two positions: the
+# only way back is to carry the correspondence through.
+#
+# text_map_build runs the display pass and keeps, for every drawn glyph, the
+# character it came from and the direction it runs in. Everything else here
+# reads that:
+#
+#   text_map_caret_x     where to draw the caret for a logical position
+#   text_map_index_at    which logical position a click landed on
+#   text_map_source      which character a drawn glyph came from, so a
+#                        selection can be painted as the visual runs it
+#                        actually occupies rather than one wrong rectangle
+#
+# The caret sits on the LEADING edge of the character it precedes, and which
+# edge that is turns over with the run: the left side of a left-to-right
+# glyph, the right side of a right-to-left one. That single rule is what makes
+# a caret behave in mixed text.
+
+EQOI_TEXTMAP_CAPACITY: i32 = 256
+
+attach EqoiApp:
+    fun _textmap_reserve(self) -> i32:
+        if self.tm_source != 0:
+            return 1
+        span: i64 = (EQOI_TEXTMAP_CAPACITY as i64) * 4
+        self.tm_source = Memory.malloc_zeroed(span)
+        self.tm_display = Memory.malloc_zeroed(span)
+        self.tm_sources = Memory.malloc_zeroed(span)
+        self.tm_levels = Memory.malloc_zeroed(span)
+        self.tm_scratch = Memory.malloc_zeroed(span * 7)
+        if self.tm_source == 0 or self.tm_display == 0 or self.tm_sources == 0 or self.tm_levels == 0 or self.tm_scratch == 0:
+            self._free_textmap()
+            return 0
+        return 1
+
+    # Build the mapping for a NUL-terminated buffer. Returns 1 when the text
+    # is laid out and the queries below are answerable.
+    fun text_map_build(self, buf: i64, max_len: i32) -> i32:
+        if self._textmap_reserve() == 0:
+            return 0
+        self.tm_count = utf8_decode_all(buf as str, self.tm_source, EQOI_TEXTMAP_CAPACITY)
+        if self.tm_count <= 0:
+            self.tm_count = 0
+            self.tm_display_count = 0
+            self.tm_para = 0
+            if self.is_rtl() == 1:
+                self.tm_para = 1
+            return 1
+        self.tm_para = bidi_paragraph_level(self.tm_source, self.tm_count)
+        self.tm_display_count = text_display_detail(self.tm_source, self.tm_count, self.tm_display, self.tm_sources, self.tm_levels, EQOI_TEXTMAP_CAPACITY, self.tm_scratch)
+        if self.tm_display_count < 0:
+            self.tm_display_count = 0
+            return 0
+        return 1
+
+    fun text_map_display_count(self) -> i32:
+        return self.tm_display_count
+
+    fun text_map_source(self, visual: i32) -> i32:
+        if visual < 0 or visual >= self.tm_display_count:
+            return 0
+        return Memory.read_i32(self.tm_sources + (visual as i64) * 4)
+
+    fun text_map_is_rtl_glyph(self, visual: i32) -> i32:
+        if visual < 0 or visual >= self.tm_display_count:
+            return 0
+        return Memory.read_i32(self.tm_levels + (visual as i64) * 4) & 1
+
+    fun text_map_advance(self, visual: i32) -> i32:
+        if visual < 0 or visual >= self.tm_display_count:
+            return 0
+        return self.surface.codepoint_width(Memory.read_i32(self.tm_display + (visual as i64) * 4))
+
+    # Pixel offset of the left edge of a drawn glyph.
+    fun text_map_offset(self, visual: i32) -> i32:
+        x: i32 = 0
+        i: i32 = 0
+        while i < visual and i < self.tm_display_count:
+            x = x + self.text_map_advance(i)
+            i = i + 1
+        return x
+
+    fun text_map_width(self) -> i32:
+        return self.text_map_offset(self.tm_display_count)
+
+    # ---------------------------------------------------------------
+    # Logical position -> pixels
+    # ---------------------------------------------------------------
+    fun text_map_caret_x(self, logical: i32) -> i32:
+        if self.tm_display_count <= 0:
+            return 0
+
+        # The caret precedes this character: it goes on that glyph's leading
+        # edge, which is its right side when the glyph runs right to left.
+        i: i32 = 0
+        while i < self.tm_display_count:
+            if self.text_map_source(i) == logical:
+                if self.text_map_is_rtl_glyph(i) == 1:
+                    return self.text_map_offset(i) + self.text_map_advance(i)
+                return self.text_map_offset(i)
+            i = i + 1
+
+        # No glyph starts there: the caret is past the end, or inside a
+        # ligature. Sit on the trailing edge of the last character before it,
+        # which for a ligature is the far side of the glyph that swallowed it.
+        best: i32 = -1
+        best_source: i32 = -1
+        i = 0
+        source: i32 = 0
+        while i < self.tm_display_count:
+            source = self.text_map_source(i)
+            if source < logical and source > best_source:
+                best_source = source
+                best = i
+            i = i + 1
+        if best < 0:
+            if self.tm_para == 1:
+                return self.text_map_width()
+            return 0
+        if self.text_map_is_rtl_glyph(best) == 1:
+            return self.text_map_offset(best)
+        return self.text_map_offset(best) + self.text_map_advance(best)
+
+    # ---------------------------------------------------------------
+    # Pixels -> logical position
+    # ---------------------------------------------------------------
+    fun text_map_index_at(self, offset_x: i32) -> i32:
+        if self.tm_display_count <= 0:
+            return 0
+        if offset_x < 0:
+            if self.tm_para == 1:
+                return self.tm_count
+            return 0
+
+        x: i32 = 0
+        i: i32 = 0
+        advance: i32 = 0
+        leading: i32 = 0
+        while i < self.tm_display_count:
+            advance = self.text_map_advance(i)
+            if offset_x < x + advance:
+                leading = 0
+                if offset_x < x + advance / 2:
+                    leading = 1
+                if self.text_map_is_rtl_glyph(i) == 1:
+                    leading = 1 - leading
+                if leading == 1:
+                    return self.text_map_source(i)
+                return self.text_map_source(i) + 1
+            x = x + advance
+            i = i + 1
+
+        if self.tm_para == 1:
+            return 0
+        return self.tm_count
+
+    # ---------------------------------------------------------------
+    # Byte offsets, which is what the buffer and the caret are stored in
+    # ---------------------------------------------------------------
+    fun text_bytes_to_codepoints(self, buf: i64, byte_offset: i32) -> i32:
+        limit: i64 = byte_offset as i64
+        offset: i64 = 0
+        count: i32 = 0
+        ch: Utf8Char = Utf8Char()
+        while offset < limit:
+            ch = utf8_decode(buf, offset, limit)
+            if ch.size <= 0:
+                return count
+            offset = offset + (ch.size as i64)
+            count = count + 1
+        return count
+
+    fun text_codepoints_to_bytes(self, buf: i64, max_len: i32, index: i32) -> i32:
+        limit: i64 = Memory.strlen(buf as str)
+        offset: i64 = 0
+        count: i32 = 0
+        ch: Utf8Char = Utf8Char()
+        while offset < limit and count < index:
+            ch = utf8_decode(buf, offset, limit)
+            if ch.size <= 0:
+                return offset as i32
+            offset = offset + (ch.size as i64)
+            count = count + 1
+        return offset as i32
+
+    fun _free_textmap(self):
+        if self.tm_source != 0:
+            Memory.free(self.tm_source)
+        if self.tm_display != 0:
+            Memory.free(self.tm_display)
+        if self.tm_sources != 0:
+            Memory.free(self.tm_sources)
+        if self.tm_levels != 0:
+            Memory.free(self.tm_levels)
+        if self.tm_scratch != 0:
+            Memory.free(self.tm_scratch)
+        self.tm_source = 0
+        self.tm_display = 0
+        self.tm_sources = 0
+        self.tm_levels = 0
+        self.tm_scratch = 0
+        self.tm_count = 0
+        self.tm_display_count = 0

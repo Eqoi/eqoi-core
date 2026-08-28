@@ -67,6 +67,16 @@ struct EqoiApp:
     text_anchor: i32 = 0
     text_dragging: i32 = 0
 
+    # ---- Logical-to-visual mapping (see textmap.dlt) ----
+    tm_source: i64 = 0
+    tm_display: i64 = 0
+    tm_sources: i64 = 0
+    tm_levels: i64 = 0
+    tm_scratch: i64 = 0
+    tm_count: i32 = 0
+    tm_display_count: i32 = 0
+    tm_para: i32 = 0
+
     # ---- Frame timing and animation (see anim.dlt) ----
     frame_time_us: i64 = 0
     frame_delta_us: i64 = 0
@@ -256,6 +266,7 @@ attach EqoiApp:
         self._free_id_stack()
         self._free_table()
         self._free_anim()
+        self._free_textmap()
         if self.commands.is_valid() == 1:
             self.commands.destroy()
         if self.surface.is_valid() == 1:

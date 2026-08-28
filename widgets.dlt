@@ -390,26 +390,38 @@ attach EqoiApp:
         if self.focus_id == id:
             focused = 1
 
-        text_x: i32 = x + 8
         length: i32 = self.text_length(buf, max_len)
         changed: i32 = 0
+
+        # The mapping from stored text to drawn glyphs. Everything that has to
+        # know where a character ended up on screen reads it.
+        self.text_map_build(buf, max_len)
+        text_x: i32 = x + 8
+        if self.is_rtl() == 1:
+            text_x = x + width - 8 - self.text_map_width()
 
         if focused == 1:
             self.text_claim(id, length)
 
-            # The pointer places the caret and drags out a selection.
+            # The pointer places the caret and drags out a selection, both in
+            # visual space and converted back to the position in the buffer.
             if hovered == 1 and mouse.left_pressed() == 1:
-                self.text_caret = self.text_index_at(buf, length, text_x, mouse.x)
+                self.text_caret = self.text_codepoints_to_bytes(buf, max_len, self.text_map_index_at(mouse.x - text_x))
                 self.text_anchor = self.text_caret
                 self.text_dragging = 1
             if self.text_dragging == 1:
                 if mouse.left_down == 1:
-                    self.text_caret = self.text_index_at(buf, length, text_x, mouse.x)
+                    self.text_caret = self.text_codepoints_to_bytes(buf, max_len, self.text_map_index_at(mouse.x - text_x))
                 else:
                     self.text_dragging = 0
 
             changed = self.text_apply_keys(buf, max_len)
-            length = self.text_length(buf, max_len)
+            if changed == 1:
+                # Editing moved the text under the mapping; rebuild it before
+                # anything is drawn from it.
+                self.text_map_build(buf, max_len)
+                if self.is_rtl() == 1:
+                    text_x = x + width - 8 - self.text_map_width()
         elif self.text_owner == id:
             # Focus moved on; release the caret so the next input starts clean.
             self.text_owner = 0
@@ -428,20 +440,44 @@ attach EqoiApp:
         commands.push_fill_rounded_rect(x, y, width, height, r, self.theme.surface)
         commands.push_outline_rounded_rect(x, y, width, height, r, border_color, self.theme.border_width)
 
-        # Selection sits behind the text, so it is pushed first.
+        # A selection is a range in the stored text, and the glyphs it covers
+        # need not be next to each other on screen: a latin word inside an
+        # Arabic line is one run, and the Arabic either side of it is another.
+        # Paint the runs it actually occupies rather than one rectangle
+        # between two ends that may not bound it.
         if focused == 1 and self.text_has_selection() == 1:
-            sel_left: i32 = self.text_prefix_width(buf, self.text_sel_start())
-            sel_right: i32 = self.text_prefix_width(buf, self.text_sel_end())
-            commands.push_fill_rect(text_x + sel_left, y + 4, sel_right - sel_left, height - 8, self.theme.surface_active)
+            sel_a: i32 = self.text_bytes_to_codepoints(buf, self.text_sel_start())
+            sel_b: i32 = self.text_bytes_to_codepoints(buf, self.text_sel_end())
+            run_x: i32 = 0 - 1
+            run_w: i32 = 0
+            cursor: i32 = 0
+            v: i32 = 0
+            adv: i32 = 0
+            source: i32 = 0
+            while v < self.text_map_display_count():
+                adv = self.text_map_advance(v)
+                source = self.text_map_source(v)
+                if source >= sel_a and source < sel_b:
+                    if run_x < 0:
+                        run_x = cursor
+                        run_w = 0
+                    run_w = run_w + adv
+                elif run_x >= 0:
+                    commands.push_fill_rect(text_x + run_x, y + 4, run_w, height - 8, self.theme.surface_active)
+                    run_x = 0 - 1
+                cursor = cursor + adv
+                v = v + 1
+            if run_x >= 0:
+                commands.push_fill_rect(text_x + run_x, y + 4, run_w, height - 8, self.theme.surface_active)
 
         content: str = buf as str
         commands.push_text(text_x, y + (height - self.text_height()) / 2, content, self.theme.text)
 
-        # Caret at its real pixel position, measured through the face rather
-        # than assumed from a fixed advance.
+        # The caret sits on the leading edge of the character it precedes,
+        # which is the right side of that character in a right-to-left run.
         if focused == 1:
             if (self.frame_counter / 30) & 1 == 0:
-                caret_x: i32 = text_x + self.text_prefix_width(buf, self.text_caret)
+                caret_x: i32 = text_x + self.text_map_caret_x(self.text_bytes_to_codepoints(buf, self.text_caret))
                 commands.push_fill_rect(caret_x, y + 6, 1, height - 12, self.theme.text)
         self.push_commands(commands)
         return changed

@@ -4,7 +4,7 @@
 
 [info]
 name = eqoi
-version = 0.17.0
+version = 0.18.0
 layer = composition
 no-bindings = true
 description = Native application framework for Dolet with frame timing and animated widget states, a virtualized data table, caret and selection text editing, keyboard focus traversal, a nestable widget identity stack, headless offscreen testing, loadable proportional TrueType text, anti-aliased widgets, lifecycle, software surfaces, input snapshots, flexible responsive layout with alignment, wrapping and grids, themes, managed state, and application services on top of ui.
@@ -14,6 +14,8 @@ window = required
 ui = required
 input = required
 fonts = required
+text = required
+unicode = required
 
 [link.windows]
 # Native linking is inherited from window/input.
