@@ -9,7 +9,7 @@ On Linux the public API is display-server neutral. The shared `window` adapter
 uses native Wayland/xdg-shell when available and falls back to X11/XWayland;
 Eqoi does not contain display-server-specific rendering or input code.
 
-Current version: **0.22.0**
+Current version: **0.23.0**
 
 ```text
 Eqoi application
@@ -137,6 +137,34 @@ license under `examples/assets/fonts`.
 `panel_begin/end` and scrollable regions use the dynamic nested clip stack from
 `ui`. Draw commands and command text grow safely instead of being silently
 dropped at a fixed capacity.
+
+## Images
+
+Eqoi draws a pixel buffer; it does not decode one. Decoding belongs to the
+`image` package, which reads PNG and JPEG in pure Dolet, and keeping the two
+apart means an application that draws no images carries no decoder — exactly
+as one that loads no font carries no TrueType parser.
+
+```dolet
+picture: Image = PNG.load("logo.png")
+logo: EqoiImage = app.new_image_rgba(picture.data, picture.width,
+                                     picture.height, picture.stride)
+app.image(x, y, logo)
+```
+
+The two libraries pack a pixel differently: `image` stores red first and the
+surface stores blue first. Converting per pixel per frame would repeat work
+sixty times a second for an answer that never changes, so a handle converts
+**once** when it is made. `borrow_image` takes a buffer already in the
+surface's order and copies nothing.
+
+- `image` draws at the picture's own size.
+- `image_scaled` stretches into a rectangle, sampling nearest.
+- `image_fit` scales to fit without distorting and centres what is left over,
+  which is what a thumbnail wants and what stretching gets wrong.
+- `icon` multiplies by a colour, so one white glyph serves a whole theme.
+
+Alpha blends, and an image obeys the clip stack like everything else.
 
 ## State
 

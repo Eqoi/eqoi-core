@@ -1,0 +1,128 @@
+# ============================
+#  Eqoi Images
+# ============================
+# Eqoi draws a pixel buffer; it does not decode one. Decoding belongs to the
+# image package, which reads PNG and JPEG in pure Dolet, and keeping the two
+# apart means an application that draws no images carries no decoder, exactly
+# as an application that loads no font carries no TrueType parser.
+#
+#     picture: Image = PNG.load("logo.png")          # the image package
+#     logo: EqoiImage = app.new_image_rgba(picture.data, picture.width,
+#                                          picture.height, picture.stride)
+#     app.image(x, y, logo)
+#
+# The two libraries pack a pixel differently: `image` stores red first and the
+# surface stores blue first. Converting per pixel per frame would be work
+# repeated sixty times a second for an answer that never changes, so a handle
+# converts once when it is made and holds the result in the surface's order.
+#
+# A handle owns its pixels and is released with the application.
+
+@stack
+struct EqoiImage:
+    pixels: i64 = 0
+    width: i32 = 0
+    height: i32 = 0
+    stride: i32 = 0
+
+attach EqoiImage:
+    fun is_valid(self) -> i32:
+        if self.pixels == 0 or self.width <= 0 or self.height <= 0:
+            return 0
+        return 1
+
+attach EqoiApp:
+    # Take a buffer that is already in the surface's channel order. Nothing is
+    # copied: the caller keeps it alive for as long as it is drawn.
+    fun borrow_image(self, pixels: i64, width: i32, height: i32, stride: i32) -> EqoiImage:
+        handle: EqoiImage = EqoiImage()
+        if pixels == 0 or width <= 0 or height <= 0:
+            return handle
+        handle.pixels = pixels
+        handle.width = width
+        handle.height = height
+        handle.stride = stride
+        if handle.stride <= 0:
+            handle.stride = width * 4
+        return handle
+
+    # Take a buffer in the image package's order — red first — and convert it
+    # once. The copy is owned by the application and released with it.
+    fun new_image_rgba(self, pixels: i64, width: i32, height: i32, stride: i32) -> EqoiImage:
+        handle: EqoiImage = EqoiImage()
+        if pixels == 0 or width <= 0 or height <= 0:
+            return handle
+        source_stride: i32 = stride
+        if source_stride <= 0:
+            source_stride = width * 4
+
+        target: i64 = Memory.malloc_zeroed((width as i64) * (height as i64) * 4)
+        if target == 0:
+            return handle
+        if self._track(target) == 0:
+            return handle
+
+        y: i32 = 0
+        x: i32 = 0
+        source: i32 = 0
+        red: i32 = 0
+        green: i32 = 0
+        blue: i32 = 0
+        alpha: i32 = 0
+        while y < height:
+            x = 0
+            while x < width:
+                source = Memory.read_i32(pixels + (y as i64) * (source_stride as i64) + (x as i64) * 4)
+                # Red and blue trade places; green and alpha stay put. Written
+                # out channel by channel rather than as one masked expression,
+                # because a sign-extended alpha mask is a good way to get this
+                # subtly wrong.
+                red = source & 255
+                green = (source >> 8) & 255
+                blue = (source >> 16) & 255
+                alpha = (source >> 24) & 255
+                Memory.write_i32(target + ((y as i64) * (width as i64) + (x as i64)) * 4,
+                    (blue & 255) | ((green & 255) << 8) | ((red & 255) << 16) | ((alpha & 255) << 24))
+                x = x + 1
+            y = y + 1
+
+        handle.pixels = target
+        handle.width = width
+        handle.height = height
+        handle.stride = width * 4
+        return handle
+
+    # ---------------------------------------------------------------
+    # Drawing
+    # ---------------------------------------------------------------
+    # At its own size.
+    fun image(self, x: i32, y: i32, picture: EqoiImage):
+        self.image_scaled(x, y, picture.width, picture.height, picture, 0)
+
+    # Stretched into a rectangle, sampling nearest.
+    fun image_scaled(self, x: i32, y: i32, width: i32, height: i32, picture: EqoiImage, tint: UIColor):
+        if picture.is_valid() == 0:
+            return
+        commands: UIDrawList = self.commands
+        commands.push_image(x, y, width, height, picture.pixels, picture.width, picture.height, picture.stride, tint)
+        self.push_commands(commands)
+
+    # Scaled to fit inside a rectangle without distorting it, and centred in
+    # whatever room is left over. This is what a thumbnail wants and what
+    # stretching to the rectangle gets wrong.
+    fun image_fit(self, x: i32, y: i32, width: i32, height: i32, picture: EqoiImage):
+        if picture.is_valid() == 0:
+            return
+        if width <= 0 or height <= 0:
+            return
+        draw_w: i32 = width
+        draw_h: i32 = (picture.height * width) / picture.width
+        if draw_h > height:
+            draw_h = height
+            draw_w = (picture.width * height) / picture.height
+        self.image_scaled(x + (width - draw_w) / 2, y + (height - draw_h) / 2, draw_w, draw_h, picture, 0)
+
+    # An icon drawn in a colour of the caller's choosing, which is how one
+    # white glyph serves a whole theme.
+    fun icon(self, x: i32, y: i32, width: i32, height: i32, picture: EqoiImage, color: UIColor):
+        self.image_scaled(x, y, width, height, picture, color)

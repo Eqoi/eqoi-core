@@ -26,6 +26,7 @@ load eqoi/anim
 load eqoi/widgets
 load eqoi/controls
 load eqoi/state
+load eqoi/images
 load eqoi/headless
 
 export EqoiTheme
@@ -34,6 +35,7 @@ export EqoiApp
 export EqoiInt
 export EqoiBool
 export EqoiText
+export EqoiImage
 export EQOI_LAYOUT_COLUMN
 export EQOI_LAYOUT_ROW
 export EQOI_LAYOUT_GRID
