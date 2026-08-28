@@ -9,7 +9,7 @@ On Linux the public API is display-server neutral. The shared `window` adapter
 uses native Wayland/xdg-shell when available and falls back to X11/XWayland;
 Eqoi does not contain display-server-specific rendering or input code.
 
-Current version: **0.14.0**
+Current version: **0.15.0**
 
 ```text
 Eqoi application
@@ -194,8 +194,11 @@ dragged while the window resizes, a focused text input inside a scrolling
 panel, an open dropdown in a reflowing layout: each becomes a different widget
 mid-gesture and drops the state the gesture depended on.
 
-`push_id` gives the caller a say. While an identity is pushed it **replaces**
-position in the hash, so the widget keeps its identity wherever layout puts it.
+`push_id` gives the caller a say. While an identity is pushed, the hash is the
+scope plus the widget's place within it, and position drops out — so the widget
+keeps its identity wherever layout puts it, and two widgets in one scope stay
+two widgets. Counting restarts on every push, so adding a control to one panel
+cannot renumber another panel's.
 
 ```dolet
 app.push_id_str("volume")

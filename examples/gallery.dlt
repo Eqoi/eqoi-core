@@ -1,0 +1,285 @@
+import eqoi
+
+# Eqoi Gallery — a working application that exercises the framework the way an
+# application would: a header, a tab bar, a status line, and four pages that
+# each put one part of Eqoi under the hands.
+#
+# Everything here uses the default font, which fonts provides and ui installs
+# automatically. Nothing is loaded from disk, so this runs from a bare build.
+
+HEADER_H: i32 = 52
+TABS_H:   i32 = 38
+STATUS_H: i32 = 30
+TABLE_ROWS: i32 = 5000
+
+fun page_controls(app: EqoiApp, area: UIRect, checks: i64, notify: i64, autosave: i64, volume: i64, progress: i64, clicks: i64, mode: i64, modal: i64):
+    columns: EqoiLayout = EqoiLayout.row_in(area, 16, 16)
+    columns.flex_even(2)
+    left: UIRect = columns.next_flex(1)
+    right: UIRect = columns.next_flex(1)
+
+    # ---- left column ----
+    app.panel_begin(left.left, left.top, left.right - left.left, left.bottom - left.top)
+    l: EqoiLayout = EqoiLayout.column_in(left, 18, 14)
+    app.title(l.next(0, 24).left, left.top + 18, "Controls")
+    l.skip(6)
+
+    row: UIRect = l.next(0, 40)
+    buttons: EqoiLayout = EqoiLayout.row_in(row, 0, 10)
+    buttons.flex(3, 2)
+    primary: UIRect = buttons.next_flex(2)
+    second: UIRect = buttons.next_flex(1)
+    if app.button(primary.left, primary.top, primary.right - primary.left, 40, "Click me") == 1:
+        app.set_int(clicks, app.get_int(clicks) + 1)
+    if app.secondary_button(second.left, second.top, second.right - second.left, 40, "Reset") == 1:
+        app.set_int(clicks, 0)
+
+    counted: i32 = app.get_int(clicks)
+    app.muted_label(l.next(0, 20).left, l.cursor_y - 20, @"clicked {counted} times")
+
+    boxes: UIRect = l.next(0, 24)
+    app.checkbox(boxes.left, boxes.top, "Enable feature", checks)
+    toggles: UIRect = l.next(0, 24)
+    app.toggle(toggles.left, toggles.top, "Notifications", notify)
+    toggles2: UIRect = l.next(0, 24)
+    app.toggle(toggles2.left, toggles2.top, "Autosave", autosave)
+
+    l.skip(4)
+    app.muted_label(l.next(0, 18).left, l.cursor_y - 18, "Volume")
+    slider_rect: UIRect = l.next(0, 24)
+    app.slider(slider_rect.left, slider_rect.top, slider_rect.right - slider_rect.left, 0, 100, volume)
+
+    app.muted_label(l.next(0, 18).left, l.cursor_y - 18, "Progress")
+    bar: UIRect = l.next(0, 18)
+    app.progress_bar(bar.left, bar.top, bar.right - bar.left, 14, app.get_int(progress))
+    app.panel_end()
+
+    # ---- right column ----
+    app.panel_begin(right.left, right.top, right.right - right.left, right.bottom - right.top)
+    r: EqoiLayout = EqoiLayout.column_in(right, 18, 14)
+    app.title(r.next(0, 24).left, right.top + 18, "More")
+    r.skip(6)
+
+    app.muted_label(r.next(0, 18).left, r.cursor_y - 18, "Quality")
+    dd: UIRect = r.next(0, 30)
+    label: str = "Balanced"
+    picked: i32 = app.get_int(mode)
+    if picked == 1:
+        label = "Performance"
+    if picked == 2:
+        label = "Quality"
+    if app.dropdown_begin(dd.left, dd.top, 200, 30, mode, label) == 1:
+        app.dropdown_item("Balanced")
+        app.dropdown_item("Performance")
+        app.dropdown_item("Quality")
+    app.dropdown_end()
+
+    r.skip(74)
+    app.separator(r.next(0, 1).left, r.cursor_y - 1, right.right - right.left - 36)
+    r.skip(4)
+
+    app.muted_label(r.next(0, 18).left, r.cursor_y - 18, "Keyboard")
+    app.label(r.next(0, 18).left, r.cursor_y - 18, "Tab / Shift+Tab move focus")
+    app.label(r.next(0, 18).left, r.cursor_y - 18, "Enter fires the focused control")
+    app.label(r.next(0, 18).left, r.cursor_y - 18, "Left / Right move a focused slider")
+
+    r.skip(6)
+    dialog: UIRect = r.next(0, 36)
+    if app.secondary_button(dialog.left, dialog.top, 160, 36, "Open dialog") == 1:
+        app.set_bool(modal, 1)
+    app.panel_end()
+
+fun page_layout(app: EqoiApp, area: UIRect):
+    page: EqoiLayout = EqoiLayout.column_in(area, 16, 14)
+
+    # Flexible weights, drawn as the bars they produce.
+    app.title(page.next(0, 22).left, page.cursor_y - 22, "Flex weights 1 : 2 : 1")
+    weights: UIRect = page.next(0, 40)
+    bars: EqoiLayout = EqoiLayout.row_in(weights, 0, 8)
+    bars.flex(4, 3)
+    one: UIRect = bars.next_flex(1)
+    two: UIRect = bars.next_flex(2)
+    three: UIRect = bars.next_flex(1)
+    app.rect(one.left, one.top, one.right - one.left, 40, app.theme.accent)
+    app.rect(two.left, two.top, two.right - two.left, 40, app.theme.surface_active)
+    app.rect(three.left, three.top, three.right - three.left, 40, app.theme.accent)
+
+    # Cross-axis alignment.
+    app.title(page.next(0, 22).left, page.cursor_y - 22, "Cross-axis alignment")
+    aligned: UIRect = page.next(0, 76)
+    app.outline(aligned.left, aligned.top, aligned.right - aligned.left, 76, app.theme.border)
+    lanes: EqoiLayout = EqoiLayout.row_in(aligned, 8, 8)
+    lanes.flex_even(4)
+    modes: i32 = 0
+    while modes < 4:
+        lane: UIRect = lanes.next_flex(1)
+        inner: EqoiLayout = EqoiLayout.column_in(lane, 0, 0)
+        inner.align(modes)
+        block: UIRect = inner.next(40, 40)
+        app.rect(block.left, block.top, block.right - block.left, 40, app.theme.accent)
+        modes = modes + 1
+    app.muted_label(aligned.left, aligned.bottom + 2, "start        center        end        stretch")
+
+    # A grid with a spanning cell.
+    app.title(page.next(0, 22).left, page.cursor_y + 4, "Grid, 4 columns, one cell spanning 2")
+    page.skip(4)
+    grid_area: UIRect = page.next(0, 0)
+    g: EqoiLayout = EqoiLayout.grid_in(grid_area, 0, 8, 4)
+    cell: UIRect = g.next_cell_span(2, 34)
+    app.rect(cell.left, cell.top, cell.right - cell.left, 34, app.theme.accent)
+    app.label(cell.left + 10, cell.top + 9, "span 2")
+    i: i32 = 0
+    while i < 6:
+        c: UIRect = g.next_cell(34)
+        if c.top > grid_area.bottom - 34:
+            i = 6
+        else:
+            app.rect(c.left, c.top, c.right - c.left, 34, app.theme.surface_active)
+            app.label(c.left + 10, c.top + 9, @"{i}")
+        i = i + 1
+
+fun page_table(app: EqoiApp, area: UIRect, scroll: i64, selected: i64, sort_col: i64):
+    page: EqoiLayout = EqoiLayout.column_in(area, 16, 10)
+    chosen: i32 = app.get_int(selected)
+    total: i32 = TABLE_ROWS
+    app.muted_label(page.next(0, 18).left, page.cursor_y - 18, @"{total} rows. Only the visible ones are built. Selected: {chosen}")
+
+    body: UIRect = page.next(0, 0)
+    app.table_begin(body.left, body.top, body.right - body.left, body.bottom - body.top, 26, TABLE_ROWS, scroll, selected)
+    if app.table_column("Index", 110) == 1:
+        app.set_int(sort_col, 0)
+    if app.table_column("Name", 220) == 1:
+        app.set_int(sort_col, 1)
+    if app.table_column("Value", 140) == 1:
+        app.set_int(sort_col, 2)
+    app.table_headers_end()
+    row: i32 = app.table_first_visible()
+    while row <= app.table_last_visible():
+        if app.table_row(row) == 1:
+            squared: i32 = (row * 7) & 1023
+            app.table_cell(0, @"{row}")
+            app.table_cell(1, @"item {row}")
+            app.table_cell(2, @"{squared}")
+        row = row + 1
+    app.table_end()
+
+fun page_text(app: EqoiApp, area: UIRect, name: i64, note: i64):
+    page: EqoiLayout = EqoiLayout.column_in(area, 16, 12)
+    app.title(page.next(0, 24).left, page.cursor_y - 24, "Text editing")
+    app.muted_label(page.next(0, 18).left, page.cursor_y - 18, "Click to place the caret. Drag to select. Shift+arrows extend.")
+    app.muted_label(page.next(0, 18).left, page.cursor_y - 18, "Home / End jump. Ctrl+A selects all. Backspace and Delete respect the selection.")
+    page.skip(6)
+
+    app.label(page.next(0, 18).left, page.cursor_y - 18, "Name")
+    first: UIRect = page.next(0, 32)
+    app.text_input(first.left, first.top, 420, 32, name, 47)
+
+    app.label(page.next(0, 18).left, page.cursor_y + 2, "Note")
+    page.skip(2)
+    second: UIRect = page.next(0, 32)
+    app.text_input(second.left, second.top, 420, 32, note, 63)
+
+    page.skip(10)
+    app.separator(page.next(0, 1).left, page.cursor_y - 1, area.right - area.left - 32)
+    page.skip(6)
+    app.title(page.next(0, 22).left, page.cursor_y - 22, "About the font")
+    app.label(page.next(0, 18).left, page.cursor_y - 18, "This gallery loads nothing from disk. The face comes from the")
+    app.label(page.next(0, 18).left, page.cursor_y - 18, "fonts package and ui installs it automatically, so a bare build")
+    app.label(page.next(0, 18).left, page.cursor_y - 18, "still draws text.")
+    page.skip(4)
+    app.muted_label(page.next(0, 18).left, page.cursor_y - 18, "That built-in face covers ASCII 32..126 only. Arabic shaping is")
+    app.muted_label(page.next(0, 18).left, page.cursor_y - 18, "implemented in the text package and tested, but drawing it needs")
+    app.muted_label(page.next(0, 18).left, page.cursor_y - 18, "a face with Arabic glyphs, loaded through app.use_font.")
+
+fun main() -> i32:
+    app: EqoiApp = EqoiApp.create("Eqoi Gallery", 1080, 700)
+    if app.is_valid() == 0:
+        return 1
+
+    tab: i64 = app.alloc_int(0)
+    light: i64 = app.alloc_bool(0)
+    checks: i64 = app.alloc_bool(1)
+    notify: i64 = app.alloc_bool(1)
+    autosave: i64 = app.alloc_bool(0)
+    volume: i64 = app.alloc_int(64)
+    progress: i64 = app.alloc_int(0)
+    clicks: i64 = app.alloc_int(0)
+    mode: i64 = app.alloc_int(0)
+    modal: i64 = app.alloc_bool(0)
+    scroll: i64 = app.alloc_int(0)
+    selected: i64 = app.alloc_int(-1)
+    sort_col: i64 = app.alloc_int(0)
+    name: i64 = app.alloc_buf(64)
+    note: i64 = app.alloc_buf(80)
+    if name == 0 or note == 0:
+        app.destroy()
+        return 2
+
+    was_light: i32 = 0
+    while app.running() == 1:
+        if app.begin() == 1:
+            if app.get_bool(light) != was_light:
+                was_light = app.get_bool(light)
+                if was_light == 1:
+                    app.use_light_theme()
+                else:
+                    app.use_dark_theme()
+
+            # Progress crawls on its own, which also shows the frame loop
+            # staying awake while something is moving.
+            app.set_int(progress, (app.get_int(progress) + 1) & 127)
+
+            width: i32 = app.width
+            height: i32 = app.height
+
+            # ---- header ----
+            app.rect(0, 0, width, HEADER_H, app.theme.surface)
+            app.title(20, 16, "Eqoi Gallery")
+            app.toggle(width - 150, 16, "Light", light)
+
+            # ---- tabs ----
+            app.tab_bar_begin(0, HEADER_H, width, TABS_H, tab)
+            app.tab_bar_item("Controls", 120)
+            app.tab_bar_item("Layout", 110)
+            app.tab_bar_item("Table", 100)
+            app.tab_bar_item("Text", 100)
+            app.tab_bar_end()
+
+            content: UIRect = ui_make_rect(0, HEADER_H + TABS_H, width, height - HEADER_H - TABS_H - STATUS_H)
+            active: i32 = app.get_int(tab)
+            if active == 0:
+                app.push_id_str("controls")
+                page_controls(app, content, checks, notify, autosave, volume, progress, clicks, mode, modal)
+                app.pop_id()
+            elif active == 1:
+                app.push_id_str("layout")
+                page_layout(app, content)
+                app.pop_id()
+            elif active == 2:
+                app.push_id_str("table")
+                page_table(app, content, scroll, selected, sort_col)
+                app.pop_id()
+            else:
+                app.push_id_str("text")
+                page_text(app, content, name, note)
+                app.pop_id()
+
+            # ---- status ----
+            app.rect(0, height - STATUS_H, width, STATUS_H, app.theme.surface)
+            ms: i32 = app.delta_ms()
+            moving: i32 = app.animating()
+            vol: i32 = app.get_int(volume)
+            app.muted_label(20, height - STATUS_H + 8, @"frame {ms} ms   animating {moving}   volume {vol}")
+
+            # ---- modal on top of everything ----
+            if app.get_bool(modal) == 1:
+                if app.modal_begin(420, 180, "A dialog") == 1:
+                    app.label((width - 420) / 2 + 24, (height - 180) / 2 + 60, "Escape closes a dropdown. This closes on the button.")
+                    if app.button((width - 420) / 2 + 24, (height - 180) / 2 + 110, 120, 36, "Close") == 1:
+                        app.set_bool(modal, 0)
+                    app.modal_end()
+
+            app.end()
+
+    app.destroy()
+    return 0

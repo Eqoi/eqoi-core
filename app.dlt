@@ -34,6 +34,7 @@ struct EqoiApp:
 
     # ---- Identity stack (see identity.dlt) ----
     id_stack: i64 = 0
+    id_seqs: i64 = 0
     id_depth: i32 = 0
     id_capacity: i32 = 0
 
@@ -420,7 +421,11 @@ attach EqoiApp:
         h: i64 = base
         h = (h ^ (type_tag as i64)) * prime
         if self.id_depth > 0:
+            # Inside a scope, position is replaced by the scope plus this
+            # widget's place in it. The scope alone is not enough: two inputs
+            # under one push_id would be the same widget and share a caret.
             h = (h ^ self.current_id()) * prime
+            h = (h ^ (self.next_scope_seq() as i64)) * prime
         else:
             h = (h ^ (x as i64)) * prime
             h = (h ^ (y as i64)) * prime

@@ -172,16 +172,30 @@ fun main() -> i32:
         print("eqoi identity: a pushed identity did not displace position")
         d.destroy()
         return 10
-    # Same scope, different position: identity must not move with the widget.
-    if d.widget_id(1, 99, 99) != scoped_id:
-        print("eqoi identity: a scoped widget changed identity when it moved")
+
+    # A second widget in the same scope is a DIFFERENT widget. Without this,
+    # two text inputs under one push_id would share a caret.
+    second_in_scope: i64 = d.widget_id(1, 10, 20)
+    if second_in_scope == scoped_id:
+        print("eqoi identity: two widgets in one scope collapsed into one")
         d.destroy()
-        return 11
+        return 26
     # Same scope, different widget kind: identities must stay distinct.
     if d.widget_id(2, 10, 20) == scoped_id:
         print("eqoi identity: two widget kinds collided inside one scope")
         d.destroy()
         return 12
+    d.pop_id()
+
+    # Re-entering the scope, the first widget keeps its identity wherever
+    # layout has since moved it. This is the property position cannot give.
+    d.push_id_str("panel")
+    if d.widget_id(1, 99, 99) != scoped_id:
+        print("eqoi identity: a scoped widget changed identity when it moved")
+        d.destroy()
+        return 11
+    d.pop_id()
+    d.push_id_str("panel")
 
     d.push_id_int(0)
     first_item: i64 = d.widget_id(1, 10, 20)
@@ -189,6 +203,7 @@ fun main() -> i32:
     d.push_id_int(1)
     second_item: i64 = d.widget_id(1, 10, 20)
     d.pop_id()
+    # Two rows of a list: same widget, same place in each row, different rows.
     if first_item == second_item:
         print("eqoi identity: nested integer scopes collided")
         d.destroy()
