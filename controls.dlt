@@ -1,0 +1,354 @@
+# ============================
+#  Eqoi Controls
+# ============================
+# The widgets an application reaches for once the basics are in place: a
+# choice between a few options, a number you nudge, a hierarchy you open and
+# close, a menu you summon, and a message that appears and leaves on its own.
+#
+# All of them follow the shape the rest of Eqoi uses: state lives in a value
+# the caller owns, the widget returns whether it changed this frame, and the
+# widget mirrors itself when the reading direction turns over.
+
+EQOI_TOAST_MAX: i32 = 4
+
+attach EqoiApp:
+    # ---------------------------------------------------------------
+    # Radio group
+    # ---------------------------------------------------------------
+    # One of several. The caller passes the same selection value to each
+    # option and the index this one stands for. Returns 1 on the frame this
+    # option is chosen, so a caller can act on the change without comparing
+    # against a value it kept itself.
+    fun radio(self, x: i32, y: i32, label: str, index: i32, selected_ptr: i64) -> i32:
+        dot: i32 = 16
+        id: i64 = self.widget_id(170, x, y)
+        focused: i32 = self.register_focusable(id)
+
+        label_w: i32 = self.text_width(label)
+        span: i32 = dot + 8 + label_w
+        dot_x: i32 = self.mirror_x(x, span, x, dot)
+        label_x: i32 = self.mirror_x(x, span, x + dot + 8, label_w)
+
+        mouse: UIMouseState = self.input_state.mouse
+        hovered: i32 = mouse.is_over_xy(dot_x, y, dot, dot)
+        if hovered == 1:
+            self.set_hover(id)
+
+        current: i32 = Memory.read_i32(selected_ptr)
+        chosen: i32 = 0
+        if current == index:
+            chosen = 1
+
+        picked_t: i32 = self.anim(id, chosen * 100, 900)
+        hover_t: i32 = self.anim_hover(self.mix_id(id, 7), hovered)
+        ring: UIColor = self.mix_colors(self.theme.border, self.theme.text, hover_t)
+        ring = self.mix_colors(ring, self.theme.accent, picked_t)
+
+        commands: UIDrawList = self.commands
+        cx: i32 = dot_x + dot / 2
+        cy: i32 = y + dot / 2
+        commands.push_fill_circle(cx, cy, dot / 2, self.theme.surface)
+        commands.push_outline_circle(cx, cy, dot / 2, ring, self.theme.border_width)
+        # The inner mark grows rather than appearing, so a change of choice
+        # reads as one moving indicator.
+        inner: i32 = (picked_t * (dot / 2 - 4)) / 100
+        if inner > 0:
+            commands.push_fill_circle(cx, cy, inner, self.theme.accent)
+        commands.push_text(label_x, y + (dot - self.text_height()) / 2, label, self.theme.text)
+        self.push_commands(commands)
+        if focused == 1:
+            self.focus_ring(dot_x, y, dot, dot)
+
+        take: i32 = 0
+        if hovered == 1 and mouse.left_pressed() == 1:
+            self.focus_id = id
+            take = 1
+        if self.is_activated(id) == 1:
+            take = 1
+        if take == 1 and chosen == 0:
+            Memory.write_i32(selected_ptr, index)
+            return 1
+        return 0
+
+    # ---------------------------------------------------------------
+    # Number spinner
+    # ---------------------------------------------------------------
+    # A value with two buttons and a keyboard. The arrows step it while it
+    # holds focus, which is what makes it usable without aiming at a 24-pixel
+    # target.
+    fun spinner(self, x: i32, y: i32, width: i32, height: i32, min_v: i32, max_v: i32, increment: i32, value_ptr: i64) -> i32:
+        id: i64 = self.widget_id(171, x, y)
+        focused: i32 = self.register_focusable(id)
+        mouse: UIMouseState = self.input_state.mouse
+        hovered: i32 = mouse.is_over_xy(x, y, width, height)
+        if hovered == 1:
+            self.set_hover(id)
+
+        amount: i32 = increment
+        if amount < 1:
+            amount = 1
+        value: i32 = Memory.read_i32(value_ptr)
+        if value < min_v:
+            value = min_v
+        if value > max_v:
+            value = max_v
+
+        button_w: i32 = height
+        down_x: i32 = self.mirror_x(x, width, x, button_w)
+        up_x: i32 = self.mirror_x(x, width, x + width - button_w, button_w)
+        field_x: i32 = self.mirror_x(x, width, x + button_w, width - button_w * 2)
+
+        over_down: i32 = mouse.is_over_xy(down_x, y, button_w, height)
+        over_up: i32 = mouse.is_over_xy(up_x, y, button_w, height)
+
+        moved: i32 = 0
+        if mouse.left_pressed() == 1:
+            if over_down == 1:
+                value = value - amount
+                moved = 1
+                self.focus_id = id
+            elif over_up == 1:
+                value = value + amount
+                moved = 1
+                self.focus_id = id
+
+        # Left and right step it too, so the whole control works from the
+        # keyboard once it has focus.
+        nudge: i32 = self.focus_step_x(id)
+        if nudge != 0:
+            value = value + nudge * amount
+            moved = 1
+
+        if value < min_v:
+            value = min_v
+        if value > max_v:
+            value = max_v
+        if moved == 1:
+            Memory.write_i32(value_ptr, value)
+
+        commands: UIDrawList = self.commands
+        r: i32 = self.theme.corner_radius
+        commands.push_fill_rounded_rect(x, y, width, height, r, self.theme.surface)
+        commands.push_outline_rounded_rect(x, y, width, height, r, self.theme.border, self.theme.border_width)
+
+        down_fill: UIColor = self.mix_colors(self.theme.surface, self.theme.surface_hover, self.anim_hover(self.mix_id(id, 3), over_down))
+        up_fill: UIColor = self.mix_colors(self.theme.surface, self.theme.surface_hover, self.anim_hover(self.mix_id(id, 5), over_up))
+        commands.push_fill_rect(down_x + 1, y + 1, button_w - 2, height - 2, down_fill)
+        commands.push_fill_rect(up_x + 1, y + 1, button_w - 2, height - 2, up_fill)
+        minus: i32 = down_x + button_w / 2
+        plus: i32 = up_x + button_w / 2
+        mid: i32 = y + height / 2
+        commands.push_line(minus - 5, mid, minus + 5, mid, self.theme.text, 2)
+        commands.push_line(plus - 5, mid, plus + 5, mid, self.theme.text, 2)
+        commands.push_line(plus, mid - 5, plus, mid + 5, self.theme.text, 2)
+
+        shown: str = @"{value}"
+        commands.push_text(field_x + (width - button_w * 2 - self.text_width(shown)) / 2, y + (height - self.text_height()) / 2, shown, self.theme.text)
+        self.push_commands(commands)
+        if focused == 1:
+            self.focus_ring(x, y, width, height)
+        return moved
+
+    # ---------------------------------------------------------------
+    # Tree row
+    # ---------------------------------------------------------------
+    # One row of a hierarchy. The application owns the tree and walks it; the
+    # widget draws a row at a depth with a twisty, and reports a click on that
+    # twisty so the caller can open or close the branch it knows about.
+    #
+    # Returns 1 when the twisty was hit, 2 when the row itself was chosen,
+    # 0 otherwise — a row is both a thing you open and a thing you select.
+    fun tree_row(self, x: i32, y: i32, width: i32, height: i32, depth: i32, label: str, has_children: i32, open_state: i32, selected: i32) -> i32:
+        id: i64 = self.widget_id(172, x, y)
+        mouse: UIMouseState = self.input_state.mouse
+        hovered: i32 = mouse.is_over_xy(x, y, width, height)
+        if hovered == 1:
+            self.set_hover(id)
+
+        indent: i32 = 8 + depth * 18
+        twisty: i32 = 14
+        twisty_x: i32 = self.mirror_x(x, width, x + indent, twisty)
+        label_w: i32 = self.text_width(label)
+        label_x: i32 = self.mirror_x(x, width, x + indent + twisty + 6, label_w)
+
+        commands: UIDrawList = self.commands
+        if selected == 1:
+            commands.push_fill_rect(x, y, width, height, self.theme.accent)
+        elif hovered == 1:
+            commands.push_fill_rect(x, y, width, height, self.theme.surface_hover)
+
+        text_color: UIColor = self.theme.text
+        if selected == 1:
+            text_color = self.theme.background
+
+        if has_children == 1:
+            # The twisty turns as the branch opens, so the state is legible
+            # without reading the row.
+            turn: i32 = self.anim(self.mix_id(id, 9), open_state * 100, 900)
+            cx: i32 = twisty_x + twisty / 2
+            cy: i32 = y + height / 2
+            reach: i32 = 4
+            drop: i32 = (turn * reach) / 100
+            commands.push_line(cx - reach, cy - reach + drop, cx, cy + drop, text_color, 2)
+            commands.push_line(cx, cy + drop, cx + reach, cy - reach + drop, text_color, 2)
+        commands.push_text(label_x, y + (height - self.text_height()) / 2, label, text_color)
+        self.push_commands(commands)
+
+        if hovered == 1 and mouse.left_pressed() == 1:
+            if has_children == 1 and mouse.is_over_xy(twisty_x, y, twisty, height) == 1:
+                return 1
+            return 2
+        return 0
+
+    # ---------------------------------------------------------------
+    # Context menu
+    # ---------------------------------------------------------------
+    # Summoned at a point rather than laid out with everything else, so it
+    # takes its own position and closes itself on Escape or on a click that
+    # misses it. open_ptr holds whether it is showing.
+    fun menu_begin(self, x: i32, y: i32, width: i32, open_ptr: i64) -> i32:
+        if Memory.read_i32(open_ptr) == 0:
+            self.mn_open = 0
+            return 0
+        self.mn_open = 1
+        self.mn_x = x
+        self.mn_y = y
+        self.mn_w = width
+        self.mn_item_h = self.text_height() + 14
+        self.mn_index = 0
+        self.mn_open_ptr = open_ptr
+        if self.escape_pressed() == 1:
+            Memory.write_i32(open_ptr, 0)
+            self.mn_open = 0
+            return 0
+        return 1
+
+    fun menu_item(self, label: str) -> i32:
+        if self.mn_open == 0:
+            return 0
+        top: i32 = self.mn_y + 4 + self.mn_index * self.mn_item_h
+        self.mn_index = self.mn_index + 1
+
+        mouse: UIMouseState = self.input_state.mouse
+        hovered: i32 = mouse.is_over_xy(self.mn_x, top, self.mn_w, self.mn_item_h)
+
+        commands: UIDrawList = self.commands
+        if hovered == 1:
+            commands.push_fill_rect(self.mn_x, top, self.mn_w, self.mn_item_h, self.theme.surface_hover)
+        label_w: i32 = self.text_width(label)
+        label_x: i32 = self.mirror_x(self.mn_x, self.mn_w, self.mn_x + 12, label_w)
+        commands.push_text(label_x, top + (self.mn_item_h - self.text_height()) / 2, label, self.theme.text)
+        self.push_commands(commands)
+
+        if hovered == 1 and mouse.left_pressed() == 1:
+            Memory.write_i32(self.mn_open_ptr, 0)
+            self.mn_open = 0
+            return 1
+        return 0
+
+    fun menu_separator(self):
+        if self.mn_open == 0:
+            return
+        top: i32 = self.mn_y + 4 + self.mn_index * self.mn_item_h + self.mn_item_h / 2
+        self.mn_index = self.mn_index + 1
+        commands: UIDrawList = self.commands
+        commands.push_line(self.mn_x + 8, top, self.mn_x + self.mn_w - 8, top, self.theme.border, 1)
+        self.push_commands(commands)
+
+    fun menu_end(self):
+        if self.mn_open == 0:
+            return
+        height: i32 = self.mn_index * self.mn_item_h + 8
+        commands: UIDrawList = self.commands
+        commands.push_outline_rect(self.mn_x, self.mn_y, self.mn_w, height, self.theme.border, self.theme.border_width)
+        self.push_commands(commands)
+        # A press that missed every item dismisses the menu, which is what a
+        # menu is expected to do and what makes it safe to leave open.
+        mouse: UIMouseState = self.input_state.mouse
+        if mouse.left_pressed() == 1:
+            if mouse.is_over_xy(self.mn_x, self.mn_y, self.mn_w, height) == 0:
+                Memory.write_i32(self.mn_open_ptr, 0)
+        self.mn_open = 0
+
+    # The menu's background has to be painted before its items, and its size
+    # is only known once they have been declared. Call this where the menu
+    # should sit in the draw order, before menu_begin.
+    fun menu_backdrop(self, x: i32, y: i32, width: i32, item_count: i32, open_ptr: i64):
+        if Memory.read_i32(open_ptr) == 0:
+            return
+        height: i32 = item_count * (self.text_height() + 14) + 8
+        commands: UIDrawList = self.commands
+        commands.push_fill_rect(x, y, width, height, self.theme.surface)
+        self.push_commands(commands)
+
+    # ---------------------------------------------------------------
+    # Toasts
+    # ---------------------------------------------------------------
+    # A message that appears, waits, and leaves. The application posts one and
+    # forgets it; Eqoi keeps the few that are showing and expires them on the
+    # frame clock, so a toast does not depend on the application remembering
+    # to take it down.
+    fun toast(self, message: str, milliseconds: i32) -> i32:
+        if self.ts_count >= EQOI_TOAST_MAX:
+            return 0
+        if self.ts_text == 0:
+            self.ts_text = Memory.malloc_zeroed((EQOI_TOAST_MAX as i64) * 128)
+            self.ts_left = Memory.malloc_zeroed((EQOI_TOAST_MAX as i64) * 4)
+            if self.ts_text == 0 or self.ts_left == 0:
+                return 0
+        slot: i64 = self.ts_text + (self.ts_count as i64) * 128
+        length: i64 = Memory.strlen(message)
+        if length > 126:
+            length = 126
+        Memory.copy(slot, message as i64, length)
+        Memory.write_i8(slot + length, 0 as i8)
+        Memory.write_i32(self.ts_left + (self.ts_count as i64) * 4, milliseconds)
+        self.ts_count = self.ts_count + 1
+        return 1
+
+    # Draw whatever is showing and expire what has run out. Call once, late in
+    # the frame, so toasts sit above everything else.
+    fun toasts_draw(self):
+        if self.ts_count <= 0:
+            return
+        elapsed: i32 = self.delta_ms()
+        commands: UIDrawList = self.commands
+        height: i32 = self.text_height() + 18
+        i: i32 = 0
+        alive: i32 = 0
+        left: i32 = 0
+        slot: i64 = 0
+        while i < self.ts_count:
+            slot = self.ts_text + (i as i64) * 128
+            left = Memory.read_i32(self.ts_left + (i as i64) * 4) - elapsed
+            if left > 0:
+                y: i32 = self.canvas_h - (alive + 1) * (height + 10)
+                message: str = slot as str
+                width: i32 = self.text_width(message) + 32
+                x: i32 = self.canvas_w - width - 20
+                if self.is_rtl() == 1:
+                    x = 20
+                commands.push_fill_rounded_rect(x, y, width, height, self.theme.corner_radius, self.theme.surface_active)
+                commands.push_outline_rounded_rect(x, y, width, height, self.theme.corner_radius, self.theme.accent, 1)
+                commands.push_text(x + 16, y + (height - self.text_height()) / 2, message, self.theme.text)
+                # Compact the live ones toward the front so expiry is O(n).
+                if alive != i:
+                    Memory.copy(self.ts_text + (alive as i64) * 128, slot, 127)
+                Memory.write_i32(self.ts_left + (alive as i64) * 4, left)
+                alive = alive + 1
+            i = i + 1
+        self.ts_count = alive
+        self.push_commands(commands)
+        # A toast on its way out has no OS event behind it, so the frame loop
+        # has to be told to keep coming back.
+        if alive > 0:
+            self.anim_active = self.anim_active + 1
+
+    fun _free_toasts(self):
+        if self.ts_text != 0:
+            Memory.free(self.ts_text)
+        if self.ts_left != 0:
+            Memory.free(self.ts_left)
+        self.ts_text = 0
+        self.ts_left = 0
+        self.ts_count = 0

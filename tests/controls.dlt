@@ -1,0 +1,258 @@
+import eqoi
+
+# The controls an application reaches for once the basics are in place.
+# Geometry is worked out by hand; a spinner at (100, 100, 160, 32) puts its
+# decrement button at x 100..132 and its increment at 228..260.
+
+fun main() -> i32:
+    app: EqoiApp = EqoiApp.headless(600, 400)
+    if app.is_valid() == 0:
+        print("eqoi controls: headless app creation failed")
+        return 1
+    app.inject_delta_us(10000)
+
+    # ---------------------------------------------------------------
+    # Radio: one of several, and choosing the current one changes nothing.
+    # ---------------------------------------------------------------
+    choice: i64 = app.alloc_int(0)
+    picked: i32 = 0
+    app.inject_mouse_move(28, 58)
+    app.inject_left_down()
+    if app.begin_offscreen() == 1:
+        app.radio(20, 20, "First", 0, choice)
+        picked = app.radio(20, 50, "Second", 1, choice)
+        app.radio(20, 80, "Third", 2, choice)
+        app.end()
+    if app.get_int(choice) != 1:
+        print("eqoi controls: the radio did not take the choice")
+        app.destroy()
+        return 2
+    if picked != 1:
+        print("eqoi controls: the radio did not report being chosen")
+        app.destroy()
+        return 3
+
+    # Pressing the one already chosen reports nothing.
+    app.inject_left_up()
+    if app.begin_offscreen() == 1:
+        app.radio(20, 50, "Second", 1, choice)
+        app.end()
+    app.inject_left_down()
+    if app.begin_offscreen() == 1:
+        picked = app.radio(20, 50, "Second", 1, choice)
+        app.end()
+    if picked != 0:
+        print("eqoi controls: the radio reported a change that did not happen")
+        app.destroy()
+        return 4
+    app.inject_left_up()
+    if app.begin_offscreen() == 1:
+        app.end()
+
+    # ---------------------------------------------------------------
+    # Spinner: two buttons, a keyboard, and limits that hold.
+    # ---------------------------------------------------------------
+    count: i64 = app.alloc_int(10)
+    app.inject_mouse_move(240, 116)
+    app.inject_left_down()
+    if app.begin_offscreen() == 1:
+        app.spinner(100, 100, 160, 32, 0, 20, 5, count)
+        app.end()
+    if app.get_int(count) != 15:
+        print("eqoi controls: the increment button did not raise the value")
+        app.destroy()
+        return 5
+    app.inject_left_up()
+    if app.begin_offscreen() == 1:
+        app.spinner(100, 100, 160, 32, 0, 20, 5, count)
+        app.end()
+
+    app.inject_mouse_move(110, 116)
+    app.inject_left_down()
+    if app.begin_offscreen() == 1:
+        app.spinner(100, 100, 160, 32, 0, 20, 5, count)
+        app.end()
+    if app.get_int(count) != 10:
+        print("eqoi controls: the decrement button did not lower the value")
+        app.destroy()
+        return 6
+    app.inject_left_up()
+    if app.begin_offscreen() == 1:
+        app.spinner(100, 100, 160, 32, 0, 20, 5, count)
+        app.end()
+
+    # The buttons gave it focus, so the arrows work now.
+    app.inject_mouse_move(590, 390)
+    app.inject_arrow_right()
+    if app.begin_offscreen() == 1:
+        app.spinner(100, 100, 160, 32, 0, 20, 5, count)
+        app.end()
+    if app.get_int(count) != 15:
+        print("eqoi controls: the right arrow did not step the spinner")
+        app.destroy()
+        return 7
+
+    # The maximum holds however hard it is pushed.
+    i: i32 = 0
+    while i < 6:
+        app.inject_arrow_right()
+        if app.begin_offscreen() == 1:
+            app.spinner(100, 100, 160, 32, 0, 20, 5, count)
+            app.end()
+        i = i + 1
+    if app.get_int(count) != 20:
+        print("eqoi controls: the spinner passed its maximum")
+        app.destroy()
+        return 8
+
+    # ---------------------------------------------------------------
+    # Tree row: the twisty and the row are different targets.
+    # ---------------------------------------------------------------
+    hit: i32 = 0
+    app.inject_mouse_move(14, 212)
+    app.inject_left_down()
+    if app.begin_offscreen() == 1:
+        hit = app.tree_row(0, 200, 300, 24, 0, "Branch", 1, 0, 0)
+        app.end()
+    if hit != 1:
+        print("eqoi controls: a press on the twisty was not reported")
+        app.destroy()
+        return 9
+    app.inject_left_up()
+    if app.begin_offscreen() == 1:
+        app.tree_row(0, 200, 300, 24, 0, "Branch", 1, 0, 0)
+        app.end()
+
+    app.inject_mouse_move(140, 212)
+    app.inject_left_down()
+    if app.begin_offscreen() == 1:
+        hit = app.tree_row(0, 200, 300, 24, 0, "Branch", 1, 0, 0)
+        app.end()
+    if hit != 2:
+        print("eqoi controls: a press on the row was not reported as a choice")
+        app.destroy()
+        return 10
+    app.inject_left_up()
+
+    # A row outside the pointer reports nothing.
+    app.inject_mouse_move(590, 390)
+    if app.begin_offscreen() == 1:
+        hit = app.tree_row(0, 200, 300, 24, 0, "Branch", 1, 0, 0)
+        app.end()
+    if hit != 0:
+        print("eqoi controls: an untouched row reported a press")
+        app.destroy()
+        return 11
+
+    # ---------------------------------------------------------------
+    # Context menu: an item closes it, Escape closes it, and a press
+    # that misses closes it.
+    # ---------------------------------------------------------------
+    open_menu: i64 = app.alloc_bool(1)
+    item_h: i32 = app.text_height() + 14
+    chosen: i32 = 0
+    app.inject_mouse_move(120, 50 + 4 + item_h / 2)
+    app.inject_left_down()
+    if app.begin_offscreen() == 1:
+        app.menu_backdrop(50, 50, 160, 3, open_menu)
+        if app.menu_begin(50, 50, 160, open_menu) == 1:
+            if app.menu_item("Open") == 1:
+                chosen = 1
+            if app.menu_item("Rename") == 1:
+                chosen = 2
+            app.menu_separator()
+            app.menu_end()
+        app.end()
+    if chosen != 1:
+        print("eqoi controls: the first menu item was not chosen")
+        app.destroy()
+        return 12
+    if app.get_bool(open_menu) != 0:
+        print("eqoi controls: choosing an item did not close the menu")
+        app.destroy()
+        return 13
+    app.inject_left_up()
+
+    # Escape closes it.
+    app.set_bool(open_menu, 1)
+    app.inject_mouse_move(590, 390)
+    app.inject_escape()
+    if app.begin_offscreen() == 1:
+        if app.menu_begin(50, 50, 160, open_menu) == 1:
+            app.menu_item("Open")
+            app.menu_end()
+        app.end()
+    if app.get_bool(open_menu) != 0:
+        print("eqoi controls: Escape did not close the menu")
+        app.destroy()
+        return 14
+
+    # A press that misses closes it.
+    app.set_bool(open_menu, 1)
+    if app.begin_offscreen() == 1:
+        if app.menu_begin(50, 50, 160, open_menu) == 1:
+            app.menu_item("Open")
+            app.menu_end()
+        app.end()
+    app.inject_mouse_move(500, 300)
+    app.inject_left_down()
+    if app.begin_offscreen() == 1:
+        if app.menu_begin(50, 50, 160, open_menu) == 1:
+            app.menu_item("Open")
+            app.menu_end()
+        app.end()
+    if app.get_bool(open_menu) != 0:
+        print("eqoi controls: a press outside did not dismiss the menu")
+        app.destroy()
+        return 15
+    app.inject_left_up()
+
+    # ---------------------------------------------------------------
+    # Toasts appear, hold, and leave on their own.
+    # ---------------------------------------------------------------
+    if app.begin_offscreen() == 1:
+        app.toast("Saved", 100)
+        app.toasts_draw()
+        app.end()
+    if app.ts_count != 1:
+        print("eqoi controls: the toast was not kept")
+        app.destroy()
+        return 16
+    if app.animating() != 1:
+        print("eqoi controls: a live toast did not keep the loop awake")
+        app.destroy()
+        return 17
+
+    # Ten more frames of ten milliseconds each run it out.
+    i = 0
+    while i < 11:
+        if app.begin_offscreen() == 1:
+            app.toasts_draw()
+            app.end()
+        i = i + 1
+    if app.ts_count != 0:
+        print("eqoi controls: the toast outlived its time")
+        app.destroy()
+        return 18
+    if app.animating() != 0:
+        print("eqoi controls: an expired toast still keeps the loop awake")
+        app.destroy()
+        return 19
+
+    # More toasts than the cap are refused rather than overrunning.
+    i = 0
+    accepted: i32 = 0
+    if app.begin_offscreen() == 1:
+        while i < 8:
+            accepted = accepted + app.toast("Message", 1000)
+            i = i + 1
+        app.toasts_draw()
+        app.end()
+    if accepted != 4:
+        print("eqoi controls: the toast cap did not hold")
+        app.destroy()
+        return 20
+
+    app.destroy()
+    print("eqoi controls: ok")
+    return 0

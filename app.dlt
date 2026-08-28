@@ -129,6 +129,20 @@ struct EqoiApp:
     # Modal
     md_active: i32 = 0
 
+    # Context menu (see controls.dlt)
+    mn_open: i32 = 0
+    mn_x: i32 = 0
+    mn_y: i32 = 0
+    mn_w: i32 = 0
+    mn_item_h: i32 = 0
+    mn_index: i32 = 0
+    mn_open_ptr: i64 = 0
+
+    # Toasts
+    ts_text: i64 = 0
+    ts_left: i64 = 0
+    ts_count: i32 = 0
+
     # Table (see table.dlt)
     tb_id: i64 = 0
     tb_x: i32 = 0
@@ -267,6 +281,7 @@ attach EqoiApp:
         self._free_table()
         self._free_anim()
         self._free_textmap()
+        self._free_toasts()
         if self.commands.is_valid() == 1:
             self.commands.destroy()
         if self.surface.is_valid() == 1:

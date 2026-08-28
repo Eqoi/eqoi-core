@@ -9,7 +9,7 @@ On Linux the public API is display-server neutral. The shared `window` adapter
 uses native Wayland/xdg-shell when available and falls back to X11/XWayland;
 Eqoi does not contain display-server-specific rendering or input code.
 
-Current version: **0.18.0**
+Current version: **0.19.0**
 
 ```text
 Eqoi application
@@ -108,6 +108,7 @@ rectangle.
 - scrollbars and clipped scrollable regions
 - tabs, dropdowns, modals, tooltips, drag sources, and drop targets
 - a virtualized data table with columns, selection, and sorting hooks
+- radio groups, number spinners, tree rows, context menus, and toasts
 
 All widget text measurement comes from the active `ui` surface FontFace. Eqoi
 does not hard-code glyph dimensions, so centering, carets, tabs, dropdowns, and
@@ -205,6 +206,32 @@ app.use_font(face)
 
 `examples/arabic.dlt` is a working application that does exactly this and
 prepares nothing itself.
+
+## Controls
+
+Beyond the basics: `radio` for one of several, `spinner` for a number you
+nudge, `tree_row` for a hierarchy, `menu_*` for a context menu, and `toast`
+for a message that leaves on its own.
+
+They keep the shape the rest of Eqoi uses — state in a value the caller owns,
+a return that says whether it changed, and mirroring when the direction turns
+over — with two decisions worth knowing:
+
+**A tree row is two targets.** It returns 1 when the twisty was hit and 2 when
+the row itself was chosen, because opening a branch and selecting it are
+different intentions and a row that conflates them is annoying to use. The
+application owns the tree and walks it; Eqoi draws a row at a depth.
+
+**A toast is not the application's to remember.** It is posted once and Eqoi
+expires it on the frame clock. A toast on its way out has no OS event behind
+it, so it also keeps the frame loop awake until it is gone, the same way an
+animation does.
+
+```dolet
+app.toast("Saved", 2000)
+...
+app.toasts_draw()          # once, late in the frame
+```
 
 ## Reading direction
 

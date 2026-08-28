@@ -23,6 +23,7 @@ load eqoi/textmap
 load eqoi/table
 load eqoi/anim
 load eqoi/widgets
+load eqoi/controls
 load eqoi/headless
 
 export EqoiTheme
