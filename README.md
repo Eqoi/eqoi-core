@@ -9,7 +9,7 @@ On Linux the public API is display-server neutral. The shared `window` adapter
 uses native Wayland/xdg-shell when available and falls back to X11/XWayland;
 Eqoi does not contain display-server-specific rendering or input code.
 
-Current version: **0.15.0**
+Current version: **0.16.0**
 
 ```text
 Eqoi application
@@ -181,6 +181,30 @@ not one, because that is what it is in an immediate-mode loop.
 `pixel_at(x, y)` reads back a rendered pixel once `end()` has flushed the frame,
 and `resize_offscreen(width, height)` moves the canvas so responsive layout can
 be exercised without a window manager. `tests/widgets.dlt` uses all of it.
+
+## Arabic and other scripts
+
+Write the string you mean:
+
+```dolet
+app.label(x, y, "السلام عليكم")
+app.button(x, y, w, h, "اضغط هنا")
+```
+
+`ui` chooses the cursive forms and the drawing order on the way to the pixels,
+so Arabic goes through labels, buttons, table cells and text fields the same
+way Latin does. Mixed content orders correctly too: numbers inside an Arabic
+line still read left to right.
+
+Eqoi's built-in face covers ASCII, so drawing Arabic needs a face that has it:
+
+```dolet
+face: FontFace = font_face_load_ttf("assets/fonts/arabic.ttf", 22)
+app.use_font(face)
+```
+
+`examples/arabic.dlt` is a working application that does exactly this and
+prepares nothing itself.
 
 ## Widget identity
 

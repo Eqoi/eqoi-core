@@ -1,48 +1,19 @@
 import eqoi
-import text
 
-# Arabic, one stage at a time.
+# Arabic in ordinary widgets.
 #
-# Three lines per sample show what each stage of the pipeline contributes:
-#
-#   raw       the codepoints as stored, drawn straight through
-#   shaped    each letter given the form its neighbours call for
-#   display   shaped, then reordered right to left by UAX #9
-#
-# Only the third line is correct Arabic. The first two are here because the
-# difference between them is the whole point.
+# Nothing in this file prepares text. The application writes the string it
+# means and `ui` chooses the cursive forms and the drawing order on its way to
+# the pixels, so Arabic goes through labels, buttons and a text field the same
+# way Latin does.
 #
 # The font is loaded from the system rather than shipped: Eqoi's built-in face
 # covers ASCII only, and no Arabic face is redistributed with this repository.
 
 FONT_PATH: str = "C:/Windows/Fonts/arial.ttf"
 
-fun prepare_shaped(app: EqoiApp, source: str) -> i64:
-    buffer: i64 = app.alloc_buf(256)
-    if buffer == 0:
-        return 0
-    arabic_shape_str(source, buffer, 255)
-    return buffer
-
-fun prepare_display(app: EqoiApp, source: str) -> i64:
-    buffer: i64 = app.alloc_buf(256)
-    if buffer == 0:
-        return 0
-    text_display_str(source, buffer, 255)
-    return buffer
-
-fun sample(app: EqoiApp, y: i32, title: str, raw: str, shaped: i64, display: i64) -> i32:
-    app.title(30, y, title)
-    app.muted_label(30, y + 30, "raw")
-    app.text(150, y + 30, raw, app.theme.muted_text)
-    app.muted_label(30, y + 56, "shaped")
-    app.text(150, y + 56, shaped as str, app.theme.text)
-    app.muted_label(30, y + 82, "display")
-    app.text(150, y + 82, display as str, app.theme.accent)
-    return y + 122
-
 fun main() -> i32:
-    app: EqoiApp = EqoiApp.create("Eqoi Arabic", 900, 620)
+    app: EqoiApp = EqoiApp.create("Eqoi Arabic", 880, 700)
     if app.is_valid() == 0:
         return 1
 
@@ -51,36 +22,68 @@ fun main() -> i32:
     if loaded == 1:
         app.use_font(face)
 
-    hello: str = "مرحبا"
-    greeting: str = "السلام عليكم"
-    phrase: str = "لا اله الا الله"
-    mixed: str = "مرحبا abc 123"
-
-    hello_s: i64 = prepare_shaped(app, hello)
-    hello_d: i64 = prepare_display(app, hello)
-    greeting_s: i64 = prepare_shaped(app, greeting)
-    greeting_d: i64 = prepare_display(app, greeting)
-    phrase_s: i64 = prepare_shaped(app, phrase)
-    phrase_d: i64 = prepare_display(app, phrase)
-    mixed_s: i64 = prepare_shaped(app, mixed)
-    mixed_d: i64 = prepare_display(app, mixed)
+    agree: i64 = app.alloc_bool(1)
+    level: i64 = app.alloc_int(60)
+    name: i64 = app.alloc_buf(80)
+    clicks: i64 = app.alloc_int(0)
 
     while app.running() == 1:
         if app.begin() == 1:
-            app.title(30, 24, "Arabic through the text package")
+            page: EqoiLayout = EqoiLayout.column(24, 20, app.width - 48, app.height - 40, 0, 14)
+
+            head: UIRect = page.next(0, 28)
+            app.title(head.left, head.top, "العربية في واجهات Eqoi")
             if loaded == 0:
-                app.text(30, 60, "Could not load the system font; only ASCII will draw.", app.theme.danger)
+                app.text(24, 60, "Could not load the system font.", app.theme.danger)
             else:
-                app.muted_label(30, 58, "face: arial.ttf 22px, loaded from the system through app.use_font")
+                lede: UIRect = page.next(0, 20)
+                app.muted_label(lede.left, lede.top, "لا شيء في هذا المثال يحضّر النص. التطبيق يكتب ما يقصده.")
+            page.skip(6)
 
-            y: i32 = 96
-            y = sample(app, y, "one word", hello, hello_s, hello_d)
-            y = sample(app, y, "a greeting", greeting, greeting_s, greeting_d)
-            y = sample(app, y, "a phrase with lam-alef", phrase, phrase_s, phrase_d)
-            y = sample(app, y, "mixed with latin and numbers", mixed, mixed_s, mixed_d)
+            # Plain labels, including one that mixes scripts and numbers.
+            l1: UIRect = page.next(0, 22)
+            app.label(l1.left, l1.top, "السلام عليكم ورحمة الله وبركاته")
+            l2: UIRect = page.next(0, 22)
+            app.label(l2.left, l2.top, "لا اله الا الله")
+            l3: UIRect = page.next(0, 22)
+            app.label(l3.left, l3.top, "الإصدار 0.16 من مكتبة eqoi صدر سنة 2026")
+            page.skip(8)
 
-            app.separator(30, y + 4, 840)
-            app.muted_label(30, y + 18, "In the mixed line the digits stay 123, not 321, and sit left of the Arabic.")
+            # Widgets, with Arabic labels.
+            buttons: UIRect = page.next(0, 42)
+            row: EqoiLayout = EqoiLayout.row_in(buttons, 0, 12)
+            row.flex(3, 2)
+            first: UIRect = row.next_flex(2)
+            second: UIRect = row.next_flex(1)
+            if app.button(first.left, first.top, first.right - first.left, 42, "اضغط هنا") == 1:
+                app.set_int(clicks, app.get_int(clicks) + 1)
+            if app.secondary_button(second.left, second.top, second.right - second.left, 42, "إعادة") == 1:
+                app.set_int(clicks, 0)
+
+            counted: i32 = app.get_int(clicks)
+            tally: UIRect = page.next(0, 22)
+            app.muted_label(tally.left, tally.top, @"عدد الضغطات: {counted}")
+
+            checkbox_row: UIRect = page.next(0, 26)
+            app.checkbox(checkbox_row.left, checkbox_row.top, "أوافق على الشروط", agree)
+            page.skip(4)
+
+            lvl: UIRect = page.next(0, 20)
+            app.muted_label(lvl.left, lvl.top, "المستوى")
+            slider_row: UIRect = page.next(0, 26)
+            app.slider(slider_row.left, slider_row.top, 420, 0, 100, level)
+            page.skip(6)
+
+            nm: UIRect = page.next(0, 20)
+            app.muted_label(nm.left, nm.top, "الاسم")
+            field: UIRect = page.next(0, 34)
+            app.text_input(field.left, field.top, 420, 34, name, 79)
+
+            page.skip(10)
+            rule: UIRect = page.next(0, 1)
+            app.separator(rule.left, rule.top, app.width - 48)
+            tail: UIRect = page.next(0, 20)
+            app.muted_label(tail.left, tail.top, "Latin text still measures and draws exactly as before.")
             app.end()
 
     app.destroy()
