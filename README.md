@@ -5,7 +5,11 @@ window and event loop, translates native input into `ui` snapshots, manages the
 software surface, and provides themes, layouts, widgets, clipping, and managed
 widget state.
 
-Current version: **0.6.0**
+On Linux the public API is display-server neutral. The shared `window` adapter
+uses native Wayland/xdg-shell when available and falls back to X11/XWayland;
+Eqoi does not contain display-server-specific rendering or input code.
+
+Current version: **0.7.0**
 
 ```text
 Eqoi application
@@ -65,6 +69,19 @@ it to `app.use_font(face)`. Eqoi borrows the atlas, so the application keeps the
 face alive and destroys it after `app.destroy()`; switching faces does not copy
 glyph pixels or add per-frame rasterization.
 
+```dolet
+app_font: FontFace = font_face_load_ttf("assets/fonts/Inter-Regular.ttf", 16)
+if app_font.is_valid() == 1:
+    app.use_font(app_font)
+
+# ...event loop...
+app.destroy()
+app_font.destroy()
+```
+
+The showcase uses the official Inter 4.1 static TTF and includes its OFL
+license under `examples/assets/fonts`.
+
 `panel_begin/end` and scrollable regions use the dynamic nested clip stack from
 `ui`. Draw commands and command text grow safely instead of being silently
 dropped at a fixed capacity.
@@ -86,10 +103,11 @@ corner radii. `EqoiTheme.dark()` is the built-in default and
 - `window` and `input` contain operating-system adapters.
 - GPU presentation can be added behind Eqoi without rewriting layout or widgets.
 
-Windows is verified natively. Linux/X11 uses the same Eqoi/UI layers, a cached
-`XImage` framebuffer path, X11 keyboard and pointer snapshots, and native text
-events. Linux is verified through a native WSLg/X11 integration smoke test in
-addition to cross-compilation; a desktop session needs `libX11` at runtime.
+Windows is verified natively. Linux uses the same Eqoi/UI layers through the
+display-server-neutral `window` API. Native Wayland/xdg-shell is preferred;
+X11/XWayland is the runtime fallback. Both paths use cached software surfaces,
+native keyboard/pointer/text events, and are covered by forced-backend WSLg
+integration smoke tests in addition to cross-compilation.
 
 ## Component showcase
 

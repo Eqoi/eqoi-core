@@ -6,3 +6,10 @@
 /tests/*.mlir
 /tests/*.ll
 /tests/*-linux
+
+# obin example project build output.
+/examples/app/build/
+/examples/app/dist/
+
+# Proprietary font — never redistribute. Examples use Inter (OFL).
+arial.ttf

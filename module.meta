@@ -4,8 +4,8 @@
 
 [info]
 name = eqoi
-version = 0.6.0
-description = Native application framework for Dolet with metric-aware coverage text, anti-aliased widgets, lifecycle, software surfaces, input snapshots, responsive layout, themes, managed state, and application services on top of ui.
+version = 0.7.0
+description = Native application framework for Dolet with loadable proportional TrueType text, anti-aliased widgets, lifecycle, software surfaces, input snapshots, responsive layout, themes, managed state, and application services on top of ui.
 
 [dependencies]
 window = required

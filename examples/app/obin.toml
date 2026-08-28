@@ -1,0 +1,35 @@
+[application]
+name = "app"
+version = "0.1.0"
+entry = "src/main.dlt"
+type = "console"
+
+[build]
+default-target = "windows"
+default-profile = "dev"
+incremental = true
+
+[targets.windows]
+id = "windows/x86_64"
+
+[targets.linux]
+id = "linux/x86_64"
+
+[profiles.dev]
+optimization = 0
+no-console = false
+
+[profiles.release]
+optimization = 3
+no-console = true
+
+[packages]
+auto-sync = true
+
+[assets]
+roots = ["assets"]
+destination = "assets"
+
+[package]
+directory = "dist"
+include-assets = true
