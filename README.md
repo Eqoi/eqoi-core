@@ -552,6 +552,30 @@ X11/XWayland is the runtime fallback. Both paths use cached software surfaces,
 native keyboard/pointer/text events, and are covered by forced-backend WSLg
 integration smoke tests in addition to cross-compilation.
 
+## Seeing it
+
+`examples/gallery.dlt` is the one to run first. Five tabs — controls, layout,
+a table of five thousand rows, text editing, and images — and it loads nothing
+from disk and links no decoder, so it builds and runs from a bare checkout.
+
+```powershell
+doletc examples/gallery.dlt -o examples/eqoi-gallery.exe --target windows/x86_64 --no-console
+```
+
+`examples/images.dlt` is the other half of the image story, and the only Eqoi
+example that touches the disk. It draws a picture with the image package's own
+operations, writes it as a PNG, reads that file back, converts it, and puts
+both copies side by side with a count of how many pixels differ. The count is
+there because a round trip that quietly altered one channel would still look
+right at a glance.
+
+```powershell
+doletc examples/images.dlt -o examples/eqoi-images.exe --target windows/x86_64 --no-console
+```
+
+`examples/arabic.dlt` needs a face with Arabic glyphs, loaded through
+`app.use_font`; the built-in face covers ASCII only.
+
 ## Component showcase
 
 `examples/showcase.dlt` is a complete native test application. It exercises

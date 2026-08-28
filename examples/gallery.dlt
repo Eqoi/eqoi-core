@@ -191,6 +191,172 @@ fun page_text(app: EqoiApp, area: UIRect, name: i64, note: i64):
     app.muted_label(page.next(0, 18).left, page.cursor_y - 18, "implemented in the text package and tested, but drawing it needs")
     app.muted_label(page.next(0, 18).left, page.cursor_y - 18, "a face with Arabic glyphs, loaded through app.use_font.")
 
+# A pixel is written here the way the image package writes one - red in the
+# low byte - so the conversion below is exactly the one a decoded PNG goes
+# through. The gallery decodes nothing: it has no decoder to decode with.
+fun put_rgba(buffer: i64, index: i32, r: i32, g: i32, b: i32, a: i32):
+    Memory.write_i32(buffer + (index as i64) * 4, (r & 255) | ((g & 255) << 8) | ((b & 255) << 16) | ((a & 255) << 24))
+
+# A 32x32 colour ramp inside a white border, with a diagonal across it. The
+# ramp shows whether the channels survived; the border and the diagonal show
+# what nearest sampling does to an edge when the picture is enlarged.
+fun build_swatch() -> i64:
+    buffer: i64 = Memory.malloc_zeroed(32 * 32 * 4)
+    if buffer == 0:
+        return 0
+    y: i32 = 0
+    x: i32 = 0
+    while y < 32:
+        x = 0
+        while x < 32:
+            put_rgba(buffer, y * 32 + x, x * 8, y * 8, 220 - x * 4, 255)
+            x = x + 1
+        y = y + 1
+    i: i32 = 0
+    while i < 32:
+        put_rgba(buffer, i, 255, 255, 255, 255)
+        put_rgba(buffer, 31 * 32 + i, 255, 255, 255, 255)
+        put_rgba(buffer, i * 32, 255, 255, 255, 255)
+        put_rgba(buffer, i * 32 + 31, 255, 255, 255, 255)
+        put_rgba(buffer, i * 32 + (31 - i), 255, 255, 255, 255)
+        i = i + 1
+    return buffer
+
+# A white check mark on nothing. White because a tint multiplies: whatever
+# colour it is asked for it can only take away, so white is the one starting
+# point that can become any of them.
+fun build_mark() -> i64:
+    buffer: i64 = Memory.malloc_zeroed(24 * 24 * 4)
+    if buffer == 0:
+        return 0
+    thickness: i32 = 0
+    i: i32 = 0
+    while thickness < 4:
+        i = 0
+        while i < 6:
+            put_rgba(buffer, (11 + i + thickness) * 24 + (4 + i), 255, 255, 255, 255)
+            i = i + 1
+        i = 0
+        while i < 11:
+            put_rgba(buffer, (16 - i + thickness) * 24 + (10 + i), 255, 255, 255, 255)
+            i = i + 1
+        thickness = thickness + 1
+    return buffer
+
+# White at every pixel, with the alpha alone climbing from clear to opaque.
+fun build_fade() -> i64:
+    buffer: i64 = Memory.malloc_zeroed(16 * 16 * 4)
+    if buffer == 0:
+        return 0
+    y: i32 = 0
+    x: i32 = 0
+    while y < 16:
+        x = 0
+        while x < 16:
+            put_rgba(buffer, y * 16 + x, 255, 255, 255, x * 17)
+            x = x + 1
+        y = y + 1
+    return buffer
+
+fun page_images(app: EqoiApp, area: UIRect, swatch: EqoiImage, mark: EqoiImage, fade: EqoiImage):
+    columns: EqoiLayout = EqoiLayout.row_in(area, 16, 16)
+    columns.flex_even(2)
+    left: UIRect = columns.next_flex(1)
+    right: UIRect = columns.next_flex(1)
+
+    if swatch.is_valid() == 0:
+        app.label(left.left + 18, left.top + 18, "The pictures could not be allocated.")
+        return
+
+    # ---- left column: size ----
+    app.panel_begin(left.left, left.top, left.right - left.left, left.bottom - left.top)
+    x: i32 = left.left + 18
+    y: i32 = left.top + 18
+    app.title(x, y, "Scaling")
+    y = y + 30
+    app.muted_label(x, y, "One 32x32 picture at three sizes. Nearest")
+    y = y + 18
+    app.muted_label(x, y, "sampling shows the pixels rather than blur.")
+    y = y + 26
+
+    app.image(x, y + 64, swatch)
+    app.image_scaled(x + 52, y + 32, 64, 64, swatch, 0)
+    app.image_scaled(x + 132, y, 96, 96, swatch, 0)
+    app.muted_label(x, y + 100, "32")
+    app.muted_label(x + 52, y + 100, "64")
+    app.muted_label(x + 132, y + 100, "96")
+    y = y + 128
+
+    app.separator(x, y, left.right - left.left - 36)
+    y = y + 18
+    app.title(x, y, "Fit, not stretch")
+    y = y + 30
+    app.muted_label(x, y, "The same square in the same box, twice.")
+    y = y + 26
+
+    app.outline(x, y, 170, 96, app.theme.border)
+    app.image_fit(x, y, 170, 96, swatch)
+    app.outline(x + 194, y, 170, 96, app.theme.border)
+    app.image_scaled(x + 194, y, 170, 96, swatch, 0)
+    y = y + 102
+    app.label(x, y, "image_fit")
+    app.label(x + 194, y, "image_scaled")
+    y = y + 24
+    app.muted_label(x, y, "One keeps the shape and centres what is")
+    y = y + 18
+    app.muted_label(x, y, "left over. The other fills the box.")
+    app.panel_end()
+
+    # ---- right column: colour ----
+    app.panel_begin(right.left, right.top, right.right - right.left, right.bottom - right.top)
+    rx: i32 = right.left + 18
+    ry: i32 = right.top + 18
+    app.title(rx, ry, "Tint")
+    ry = ry + 30
+    app.muted_label(rx, ry, "One white picture, five times. A tint")
+    ry = ry + 18
+    app.muted_label(rx, ry, "multiplies, so one icon serves a theme.")
+    ry = ry + 26
+
+    app.icon(rx, ry, 44, 44, mark, app.theme.accent)
+    app.icon(rx + 56, ry, 44, 44, mark, app.theme.danger)
+    app.icon(rx + 112, ry, 44, 44, mark, ui_rgb(90, 200, 140))
+    app.icon(rx + 168, ry, 44, 44, mark, ui_rgb(110, 170, 255))
+    app.image_scaled(rx + 224, ry, 44, 44, mark, 0)
+    app.muted_label(rx + 224, ry + 48, "untinted")
+    ry = ry + 76
+
+    app.separator(rx, ry, right.right - right.left - 36)
+    ry = ry + 18
+    app.title(rx, ry, "Transparency")
+    ry = ry + 30
+    app.muted_label(rx, ry, "Alpha blends with what is already there,")
+    ry = ry + 18
+    app.muted_label(rx, ry, "so the ramp changes colour halfway across.")
+    ry = ry + 26
+
+    app.rect(rx, ry, 240, 56, app.theme.accent)
+    app.rect(rx + 240, ry, 120, 56, app.theme.surface_active)
+    app.image_scaled(rx, ry, 360, 56, fade, 0)
+    ry = ry + 64
+    app.muted_label(rx, ry, "white: clear at the left, opaque at the right")
+    ry = ry + 28
+
+    app.separator(rx, ry, right.right - right.left - 36)
+    ry = ry + 18
+    app.title(rx, ry, "Where these came from")
+    ry = ry + 30
+    app.label(rx, ry, "Three buffers written by hand, right here.")
+    ry = ry + 18
+    app.label(rx, ry, "The gallery loads nothing and links no")
+    ry = ry + 18
+    app.label(rx, ry, "decoder at all.")
+    ry = ry + 24
+    app.muted_label(rx, ry, "A decoded PNG arrives by the same call.")
+    ry = ry + 18
+    app.muted_label(rx, ry, "That path is in examples/images.dlt.")
+    app.panel_end()
+
 fun main() -> i32:
     app: EqoiApp = EqoiApp.create("Eqoi Gallery", 1080, 700)
     if app.is_valid() == 0:
@@ -214,6 +380,21 @@ fun main() -> i32:
     if name == 0 or note == 0:
         app.destroy()
         return 2
+
+    # Built once, converted once. Nothing here happens per frame: the channel
+    # order of a picture does not change sixty times a second.
+    swatch_bytes: i64 = build_swatch()
+    mark_bytes: i64 = build_mark()
+    fade_bytes: i64 = build_fade()
+    swatch: EqoiImage = app.new_image_rgba(swatch_bytes, 32, 32, 0)
+    mark: EqoiImage = app.new_image_rgba(mark_bytes, 24, 24, 0)
+    fade: EqoiImage = app.new_image_rgba(fade_bytes, 16, 16, 0)
+    if swatch_bytes != 0:
+        Memory.free(swatch_bytes)
+    if mark_bytes != 0:
+        Memory.free(mark_bytes)
+    if fade_bytes != 0:
+        Memory.free(fade_bytes)
 
     was_light: i32 = 0
     while app.running() == 1:
@@ -243,6 +424,7 @@ fun main() -> i32:
             app.tab_bar_item("Layout", 110)
             app.tab_bar_item("Table", 100)
             app.tab_bar_item("Text", 100)
+            app.tab_bar_item("Images", 110)
             app.tab_bar_end()
 
             content: UIRect = ui_make_rect(0, HEADER_H + TABS_H, width, height - HEADER_H - TABS_H - STATUS_H)
@@ -259,9 +441,13 @@ fun main() -> i32:
                 app.push_id_str("table")
                 page_table(app, content, scroll, selected, sort_col)
                 app.pop_id()
-            else:
+            elif active == 3:
                 app.push_id_str("text")
                 page_text(app, content, name, note)
+                app.pop_id()
+            else:
+                app.push_id_str("images")
+                page_images(app, content, swatch, mark, fade)
                 app.pop_id()
 
             # ---- status ----

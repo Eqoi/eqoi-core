@@ -13,3 +13,7 @@
 
 # Proprietary font — never redistribute. Examples use Inter (OFL).
 arial.ttf
+
+# Written by examples/images.dlt and tests/images.dlt when they run.
+eqoi_images_demo.png
+eqoi_image_roundtrip.png

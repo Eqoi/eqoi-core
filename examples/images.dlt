@@ -1,0 +1,137 @@
+import eqoi
+import image
+
+# Images, end to end.
+#
+# Eqoi draws pixels; it does not decode them. Decoding belongs to the image
+# package, which reads PNG and JPEG in pure Dolet, and the two stay apart so
+# that an application drawing no images links no decoder at all — which is why
+# the gallery next door, with its own Images page, imports none of this.
+#
+# The whole path is here: a picture is drawn with the image package's own
+# operations, written out as a PNG, read back from that file, converted once,
+# and handed to Eqoi. Both copies are then drawn side by side and compared
+# pixel by pixel, so the round trip is shown rather than claimed.
+#
+# This writes eqoi_images_demo.png into the working directory. It is the only
+# file any Eqoi example creates.
+
+PNG_PATH: str = "eqoi_images_demo.png"
+
+fun build_picture() -> Image:
+    picture: Image = Image.create(48, 48)
+    if picture.is_valid() == 0:
+        return picture
+    y: i32 = 0
+    x: i32 = 0
+    while y < 48:
+        x = 0
+        while x < 48:
+            picture.set_pixel(x, y, image_rgba(40 + x * 4, 60 + y * 3, 200 - x * 3, 255))
+            x = x + 1
+        y = y + 1
+    # Three bars of unequal length: a shape that is obviously wrong if the
+    # decoder returns rows in the wrong order or off by one.
+    image_fill_rect(picture, 8, 8, 32, 7, image_rgb(255, 255, 255))
+    image_fill_rect(picture, 8, 21, 20, 7, image_rgb(255, 255, 255))
+    image_fill_rect(picture, 8, 34, 26, 7, image_rgb(255, 255, 255))
+    image_draw_rect(picture, 0, 0, 48, 48, image_rgb(255, 255, 255))
+    return picture
+
+# How many pixels came back different. A round trip that quietly changed one
+# channel would still produce a picture that looks right at a glance, so it is
+# worth counting rather than eyeballing.
+fun count_differences(a: Image, b: Image) -> i32:
+    if a.is_valid() == 0 or b.is_valid() == 0:
+        return -1
+    if a.width != b.width or a.height != b.height:
+        return -1
+    differences: i32 = 0
+    y: i32 = 0
+    x: i32 = 0
+    while y < a.height:
+        x = 0
+        while x < a.width:
+            if a.get_pixel(x, y) != b.get_pixel(x, y):
+                differences = differences + 1
+            x = x + 1
+        y = y + 1
+    return differences
+
+fun main() -> i32:
+    original: Image = build_picture()
+    if original.is_valid() == 0:
+        print("images: the image package would not allocate")
+        return 1
+
+    wrote: i32 = PNG.save(original, PNG_PATH)
+    decoded: Image = PNG.load(PNG_PATH)
+    differences: i32 = count_differences(original, decoded)
+    decoded_w: i32 = decoded.width
+    decoded_h: i32 = decoded.height
+
+    app: EqoiApp = EqoiApp.create("Eqoi Images", 900, 560)
+    if app.is_valid() == 0:
+        original.free()
+        decoded.free()
+        return 1
+
+    # One conversion each, before the first frame. The image package puts red
+    # in the low byte and the surface puts blue there; swapping them per pixel
+    # per frame would be sixty answers a second to a question asked once.
+    built: EqoiImage = app.new_image_rgba(original.data, original.width, original.height, original.stride)
+    from_file: EqoiImage = EqoiImage()
+    if decoded.is_valid() == 1:
+        from_file = app.new_image_rgba(decoded.data, decoded.width, decoded.height, decoded.stride)
+
+    footer_h: i32 = 136
+    while app.running() == 1:
+        if app.begin() == 1:
+            app.rect(0, 0, app.width, 56, app.theme.surface)
+            app.title(24, 17, "Images, end to end")
+
+            body: UIRect = ui_make_rect(0, 56, app.width, app.height - 56 - footer_h)
+            columns: EqoiLayout = EqoiLayout.row_in(body, 20, 20)
+            columns.flex_even(2)
+            left: UIRect = columns.next_flex(1)
+            right: UIRect = columns.next_flex(1)
+
+            # ---- what went in ----
+            app.panel_begin(left.left, left.top, left.right - left.left, left.bottom - left.top)
+            app.title(left.left + 18, left.top + 18, "Drawn in memory")
+            app.muted_label(left.left + 18, left.top + 48, "Image.create, set_pixel, fill_rect")
+            app.image(left.left + 18, left.top + 84, built)
+            app.image_scaled(left.left + 86, left.top + 84, 144, 144, built, 0)
+            app.muted_label(left.left + 18, left.bottom - 28, "48 x 48, and again at 144")
+            app.panel_end()
+
+            # ---- what came back ----
+            app.panel_begin(right.left, right.top, right.right - right.left, right.bottom - right.top)
+            app.title(right.left + 18, right.top + 18, "Read back from the file")
+            if from_file.is_valid() == 1:
+                app.muted_label(right.left + 18, right.top + 48, "PNG.save, PNG.load, new_image_rgba")
+                app.image(right.left + 18, right.top + 84, from_file)
+                app.image_scaled(right.left + 86, right.top + 84, 144, 144, from_file, 0)
+                app.muted_label(right.left + 18, right.bottom - 28, "decoded, converted once, drawn")
+            else:
+                app.label(right.left + 18, right.top + 52, "The PNG could not be read back here.")
+                app.muted_label(right.left + 18, right.top + 76, "The left half still works: drawing a")
+                app.muted_label(right.left + 18, right.top + 94, "picture never needed the disk.")
+            app.panel_end()
+
+            # ---- what it proves ----
+            foot: i32 = app.height - footer_h + 16
+            app.separator(24, foot - 10, app.width - 48)
+            if from_file.is_valid() == 1:
+                app.label(24, foot, @"{decoded_w} x {decoded_h} came back, and {differences} pixels differ from what went in.")
+            else:
+                app.label(24, foot, @"PNG.save returned {wrote}, and nothing could be decoded.")
+            app.muted_label(24, foot + 26, "Eqoi never saw a PNG. It was handed a buffer, told which order the")
+            app.muted_label(24, foot + 44, "channels were in, and converted it once. The same call serves")
+            app.muted_label(24, foot + 62, "whether the pixels came from a file, a camera, or the loop above.")
+            app.end()
+
+    app.destroy()
+    original.free()
+    decoded.free()
+    return 0
