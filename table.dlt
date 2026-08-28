@@ -1,0 +1,333 @@
+# ============================
+#  Eqoi Table
+# ============================
+# A virtualized data table. The application never hands over its data: it is
+# told which rows are on screen and fills only those, so a million rows cost
+# the same as twenty.
+#
+#     app.table_begin(x, y, w, h, 24, row_count, scroll, selected)
+#     app.table_column("Name", 220)
+#     app.table_column("Size", 90)
+#     app.table_headers_end()
+#     i: i32 = app.table_first_visible()
+#     while i <= app.table_last_visible():
+#         if app.table_row(i) == 1:
+#             app.table_cell(0, name_of(i))
+#             app.table_cell(1, size_of(i))
+#         i = i + 1
+#     changed: i32 = app.table_end()
+#
+# Selection is a single row index in a caller-owned i32, -1 for none, which
+# matches how every other stateful widget here takes its state. Sorting is the
+# application's job: table_column returns 1 when its header was clicked, and
+# what that means is for the caller to decide.
+
+EQOI_TABLE_COL_CHUNK: i32 = 8
+
+attach EqoiApp:
+    fun _table_reserve_columns(self, needed: i32) -> i32:
+        if needed <= self.tb_col_capacity:
+            return 1
+        next_capacity: i32 = self.tb_col_capacity
+        if next_capacity < EQOI_TABLE_COL_CHUNK:
+            next_capacity = EQOI_TABLE_COL_CHUNK
+        while next_capacity < needed:
+            next_capacity = next_capacity * 2
+        if self.tb_col_widths == 0:
+            self.tb_col_widths = Memory.malloc_zeroed((next_capacity as i64) * 4)
+            if self.tb_col_widths == 0:
+                return 0
+        else:
+            grown: i64 = Memory.realloc(self.tb_col_widths, (next_capacity as i64) * 4)
+            if grown == 0:
+                return 0
+            self.tb_col_widths = grown
+        self.tb_col_capacity = next_capacity
+        return 1
+
+    fun _table_col_width(self, index: i32) -> i32:
+        if index < 0 or index >= self.tb_col_count:
+            return 0
+        return Memory.read_i32(self.tb_col_widths + (index as i64) * 4)
+
+    # Left edge of a column, relative to the table's content origin.
+    fun _table_col_offset(self, index: i32) -> i32:
+        offset: i32 = 0
+        i: i32 = 0
+        while i < index and i < self.tb_col_count:
+            offset = offset + self._table_col_width(i)
+            i = i + 1
+        return offset
+
+    fun _table_body_height(self) -> i32:
+        value: i32 = self.tb_h - self.tb_header_h
+        if value < 0:
+            return 0
+        return value
+
+    fun _table_content_height(self) -> i32:
+        return self.tb_row_count * self.tb_row_height
+
+    fun _table_max_scroll(self) -> i32:
+        value: i32 = self._table_content_height() - self._table_body_height()
+        if value < 0:
+            return 0
+        return value
+
+    # ---------------------------------------------------------------
+    # Frame
+    # ---------------------------------------------------------------
+    fun table_begin(self, x: i32, y: i32, width: i32, height: i32, row_height: i32, row_count: i32, scroll_ptr: i64, selected_ptr: i64) -> i32:
+        self.tb_id = self.widget_id(160, x, y)
+        self.register_focusable(self.tb_id)
+        self.tb_x = x
+        self.tb_y = y
+        self.tb_w = width
+        self.tb_h = height
+        if row_height < 1:
+            self.tb_row_height = 1
+        else:
+            self.tb_row_height = row_height
+        if row_count < 0:
+            self.tb_row_count = 0
+        else:
+            self.tb_row_count = row_count
+        self.tb_scroll_ptr = scroll_ptr
+        self.tb_selected_ptr = selected_ptr
+        self.tb_col_count = 0
+        self.tb_col_cursor = x
+        self.tb_header_h = self.tb_row_height + 6
+        self.tb_changed = 0
+        self.tb_first = 0
+        self.tb_last = -1
+
+        commands: UIDrawList = self.commands
+        commands.push_fill_rect(x, y, width, height, self.theme.surface)
+        commands.push_outline_rect(x, y, width, height, self.theme.border, self.theme.border_width)
+        commands.push_fill_rect(x, y, width, self.tb_header_h, self.theme.background)
+        self.push_commands(commands)
+        return 1
+
+    # Declare a column and draw its header. Returns 1 on the frame its header
+    # is clicked, which is how an application is told to re-sort.
+    fun table_column(self, label: str, width: i32) -> i32:
+        if self._table_reserve_columns(self.tb_col_count + 1) == 0:
+            return 0
+        w: i32 = width
+        if w < 0:
+            w = 0
+        Memory.write_i32(self.tb_col_widths + (self.tb_col_count as i64) * 4, w)
+        index: i32 = self.tb_col_count
+        self.tb_col_count = self.tb_col_count + 1
+
+        left: i32 = self.tb_col_cursor
+        self.tb_col_cursor = left + w
+
+        mouse: UIMouseState = self.input_state.mouse
+        hovered: i32 = mouse.is_over_xy(left, self.tb_y, w, self.tb_header_h)
+
+        commands: UIDrawList = self.commands
+        if hovered == 1:
+            commands.push_fill_rect(left, self.tb_y, w, self.tb_header_h, self.theme.surface_hover)
+        commands.push_text(left + 8, self.tb_y + (self.tb_header_h - self.text_height()) / 2, label, self.theme.muted_text)
+        if index > 0:
+            commands.push_line(left, self.tb_y, left, self.tb_y + self.tb_h, self.theme.border, 1)
+        self.push_commands(commands)
+
+        if hovered == 1 and mouse.left_pressed() == 1:
+            return 1
+        return 0
+
+    # Close the header row, clip the body, and work out what is on screen.
+    fun table_headers_end(self):
+        commands: UIDrawList = self.commands
+        commands.push_line(self.tb_x, self.tb_y + self.tb_header_h, self.tb_x + self.tb_w, self.tb_y + self.tb_header_h, self.theme.border, 1)
+        self.push_commands(commands)
+
+        # The keyboard is handled here, before the visible window is worked
+        # out, so a jump to the far end lands on this frame instead of
+        # leaving the view a frame behind the selection.
+        if self.focus_id == self.tb_id and self.tb_selected_ptr != 0 and self.tb_row_count > 0:
+            selected: i32 = Memory.read_i32(self.tb_selected_ptr)
+            moved: i32 = selected
+            if self.input_state.up_pressed == 1:
+                if moved <= 0:
+                    moved = 0
+                else:
+                    moved = moved - 1
+            if self.input_state.down_pressed == 1:
+                if moved < 0:
+                    moved = 0
+                else:
+                    moved = moved + 1
+            if self.input_state.home_pressed == 1:
+                moved = 0
+            if self.input_state.end_pressed == 1:
+                moved = self.tb_row_count - 1
+            if moved > self.tb_row_count - 1:
+                moved = self.tb_row_count - 1
+            if moved != selected:
+                Memory.write_i32(self.tb_selected_ptr, moved)
+                self.tb_changed = 1
+                self.table_reveal(moved)
+
+        # The wheel is applied here for a sharper reason than tidiness: the
+        # event loop only wakes on input, so a scroll landing after the window
+        # was computed would not be shown until some later, unrelated event.
+        # A scrollbar drag can stay in table_end because the pointer is moving
+        # and frames keep arriving.
+        if self.tb_scroll_ptr != 0:
+            wheel: f32 = self.input_state.mouse.wheel_y
+            if wheel != 0.0:
+                if self.input_state.mouse.is_over_xy(self.tb_x, self.tb_y + self.tb_header_h, self.tb_w, self._table_body_height()) == 1:
+                    wheeled: i32 = Memory.read_i32(self.tb_scroll_ptr) - ((wheel * 40.0) as i32)
+                    limit: i32 = self._table_max_scroll()
+                    if wheeled < 0:
+                        wheeled = 0
+                    if wheeled > limit:
+                        wheeled = limit
+                    Memory.write_i32(self.tb_scroll_ptr, wheeled)
+
+        scroll: i32 = 0
+        if self.tb_scroll_ptr != 0:
+            scroll = Memory.read_i32(self.tb_scroll_ptr)
+        max_scroll: i32 = self._table_max_scroll()
+        if scroll < 0:
+            scroll = 0
+        if scroll > max_scroll:
+            scroll = max_scroll
+        if self.tb_scroll_ptr != 0:
+            Memory.write_i32(self.tb_scroll_ptr, scroll)
+
+        body_h: i32 = self._table_body_height()
+        first: i32 = scroll / self.tb_row_height
+        last: i32 = (scroll + body_h) / self.tb_row_height
+        if first < 0:
+            first = 0
+        if last > self.tb_row_count - 1:
+            last = self.tb_row_count - 1
+        self.tb_first = first
+        self.tb_last = last
+
+        self.push_clip(self.tb_x + 1, self.tb_y + self.tb_header_h + 1, self.tb_w - 14, body_h - 2)
+
+    # The half-open range the application should iterate. last is inclusive
+    # and is -1 when nothing is on screen, so the loop simply does not run.
+    fun table_first_visible(self) -> i32:
+        return self.tb_first
+
+    fun table_last_visible(self) -> i32:
+        return self.tb_last
+
+    # Draw one row. Returns 1 when the row is on screen and its cells should
+    # be filled; an application that honours table_first/last_visible will
+    # always see 1, but the check keeps a sloppy loop safe.
+    fun table_row(self, index: i32) -> i32:
+        if index < 0 or index >= self.tb_row_count:
+            return 0
+        scroll: i32 = 0
+        if self.tb_scroll_ptr != 0:
+            scroll = Memory.read_i32(self.tb_scroll_ptr)
+        top: i32 = self.tb_y + self.tb_header_h + index * self.tb_row_height - scroll
+        if top + self.tb_row_height <= self.tb_y + self.tb_header_h:
+            return 0
+        if top >= self.tb_y + self.tb_h:
+            return 0
+
+        self.tb_row_index = index
+        self.tb_row_y = top
+
+        selected: i32 = -1
+        if self.tb_selected_ptr != 0:
+            selected = Memory.read_i32(self.tb_selected_ptr)
+
+        mouse: UIMouseState = self.input_state.mouse
+        body_top: i32 = self.tb_y + self.tb_header_h
+        hovered: i32 = 0
+        if mouse.y >= body_top and mouse.y < self.tb_y + self.tb_h:
+            hovered = mouse.is_over_xy(self.tb_x, top, self.tb_w - 12, self.tb_row_height)
+
+        commands: UIDrawList = self.commands
+        if index == selected:
+            commands.push_fill_rect(self.tb_x, top, self.tb_w, self.tb_row_height, self.theme.accent)
+        elif hovered == 1:
+            commands.push_fill_rect(self.tb_x, top, self.tb_w, self.tb_row_height, self.theme.surface_hover)
+        elif (index & 1) == 1:
+            commands.push_fill_rect(self.tb_x, top, self.tb_w, self.tb_row_height, self.theme.surface_active)
+        self.push_commands(commands)
+
+        if hovered == 1 and mouse.left_pressed() == 1:
+            self.focus_id = self.tb_id
+            if self.tb_selected_ptr != 0 and selected != index:
+                Memory.write_i32(self.tb_selected_ptr, index)
+                self.tb_changed = 1
+        return 1
+
+    # A cell in the row currently being drawn. Text is clipped to the column.
+    fun table_cell(self, column: i32, value: str):
+        if column < 0 or column >= self.tb_col_count:
+            return
+        left: i32 = self.tb_x + self._table_col_offset(column)
+        w: i32 = self._table_col_width(column)
+        color: UIColor = self.theme.text
+        selected: i32 = -1
+        if self.tb_selected_ptr != 0:
+            selected = Memory.read_i32(self.tb_selected_ptr)
+        if self.tb_row_index == selected:
+            color = self.theme.background
+
+        commands: UIDrawList = self.commands
+        self.push_clip(left, self.tb_row_y, w - 4, self.tb_row_height)
+        commands.push_text(left + 8, self.tb_row_y + (self.tb_row_height - self.text_height()) / 2, value, color)
+        self.push_commands(commands)
+        self.pop_clip()
+
+    # Close the body, run the scrollbar and the keyboard, and report whether
+    # the selection moved this frame.
+    fun table_end(self) -> i32:
+        self.pop_clip()
+        body_h: i32 = self._table_body_height()
+        self.scrollbar_vertical_area(
+            self.tb_x + self.tb_w - 12,
+            self.tb_y + self.tb_header_h,
+            body_h,
+            body_h,
+            self._table_content_height(),
+            self.tb_scroll_ptr,
+            0,
+            0,
+            0,
+            0
+        )
+
+        commands: UIDrawList = self.commands
+        if self.focus_id == self.tb_id:
+            self.focus_ring(self.tb_x, self.tb_y, self.tb_w, self.tb_h)
+        self.push_commands(commands)
+        return self.tb_changed
+
+    # Scroll the least amount that brings a row fully into view.
+    fun table_reveal(self, index: i32):
+        if self.tb_scroll_ptr == 0:
+            return
+        scroll: i32 = Memory.read_i32(self.tb_scroll_ptr)
+        top: i32 = index * self.tb_row_height
+        bottom: i32 = top + self.tb_row_height
+        body_h: i32 = self._table_body_height()
+        if top < scroll:
+            scroll = top
+        elif bottom > scroll + body_h:
+            scroll = bottom - body_h
+        max_scroll: i32 = self._table_max_scroll()
+        if scroll < 0:
+            scroll = 0
+        if scroll > max_scroll:
+            scroll = max_scroll
+        Memory.write_i32(self.tb_scroll_ptr, scroll)
+
+    fun _free_table(self):
+        if self.tb_col_widths != 0:
+            Memory.free(self.tb_col_widths)
+        self.tb_col_widths = 0
+        self.tb_col_count = 0
+        self.tb_col_capacity = 0

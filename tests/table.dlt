@@ -1,0 +1,199 @@
+import eqoi
+
+# Table behaviour, with virtualization as the headline claim: the work a
+# frame does must not grow with the number of rows.
+
+TX: i32 = 20
+TY: i32 = 20
+TW: i32 = 300
+TH: i32 = 220
+ROW_H: i32 = 24
+ROWS: i32 = 100000
+
+# Draws one frame of the table and returns how many rows were actually
+# touched. Header is 30 tall, so the body is 190 and holds 8 rows.
+fun draw_table(app: EqoiApp, scroll: i64, selected: i64) -> i32:
+    drawn: i32 = 0
+    if app.begin_offscreen() == 1:
+        app.table_begin(TX, TY, TW, TH, ROW_H, ROWS, scroll, selected)
+        app.table_column("Name", 180)
+        app.table_column("Size", 108)
+        app.table_headers_end()
+        i: i32 = app.table_first_visible()
+        while i <= app.table_last_visible():
+            if app.table_row(i) == 1:
+                app.table_cell(0, "row")
+                app.table_cell(1, "42")
+                drawn = drawn + 1
+            i = i + 1
+        app.table_end()
+        app.end()
+    return drawn
+
+fun main() -> i32:
+    app: EqoiApp = EqoiApp.headless(400, 300)
+    if app.is_valid() == 0:
+        print("eqoi table: headless app creation failed")
+        return 1
+    scroll: i64 = app.alloc_int(0)
+    selected: i64 = app.alloc_int(-1)
+
+    # ---------------------------------------------------------------
+    # Virtualization: a hundred thousand rows, a handful drawn.
+    # ---------------------------------------------------------------
+    app.inject_mouse_move(390, 290)
+    drawn: i32 = draw_table(app, scroll, selected)
+    if drawn > 16:
+        print("eqoi table: the frame drew far more rows than fit on screen")
+        app.destroy()
+        return 2
+    if drawn < 1:
+        print("eqoi table: the frame drew nothing")
+        app.destroy()
+        return 3
+    if app.table_first_visible() != 0 or app.table_last_visible() != 7:
+        print("eqoi table: the visible window is wrong at the top")
+        app.destroy()
+        return 4
+
+    # ---------------------------------------------------------------
+    # Clicking a row selects it, and the table reports the change once.
+    # ---------------------------------------------------------------
+    # Row 2 spans y = 20 + 30 + 48 = 98 .. 122.
+    app.inject_mouse_move(100, 110)
+    app.inject_left_down()
+    changed: i32 = 0
+    if app.begin_offscreen() == 1:
+        app.table_begin(TX, TY, TW, TH, ROW_H, ROWS, scroll, selected)
+        app.table_column("Name", 180)
+        app.table_column("Size", 108)
+        app.table_headers_end()
+        i: i32 = app.table_first_visible()
+        while i <= app.table_last_visible():
+            if app.table_row(i) == 1:
+                app.table_cell(0, "row")
+            i = i + 1
+        changed = app.table_end()
+        app.end()
+    if app.get_int(selected) != 2:
+        print("eqoi table: clicking a row did not select it")
+        app.destroy()
+        return 5
+    if changed != 1:
+        print("eqoi table: the table did not report the selection change")
+        app.destroy()
+        return 6
+    app.inject_left_up()
+    draw_table(app, scroll, selected)
+
+    # ---------------------------------------------------------------
+    # Keyboard moves the selection; the table took focus from the click.
+    # ---------------------------------------------------------------
+    app.inject_mouse_move(390, 290)
+    app.inject_arrow_down()
+    draw_table(app, scroll, selected)
+    if app.get_int(selected) != 3:
+        print("eqoi table: the down arrow did not move the selection")
+        app.destroy()
+        return 7
+
+    app.inject_arrow_up()
+    app.inject_arrow_up()
+    draw_table(app, scroll, selected)
+    if app.get_int(selected) != 2:
+        print("eqoi table: the up arrow did not move the selection")
+        app.destroy()
+        return 8
+
+    # ---------------------------------------------------------------
+    # End jumps to the last row and scrolls it into view, and the frame
+    # still draws only a screenful.
+    # ---------------------------------------------------------------
+    app.inject_end()
+    tail_drawn: i32 = draw_table(app, scroll, selected)
+    if app.get_int(selected) != ROWS - 1:
+        print("eqoi table: End did not jump to the last row")
+        app.destroy()
+        return 9
+    if tail_drawn > 16:
+        print("eqoi table: drawing the tail cost more than a screenful")
+        app.destroy()
+        return 10
+    if app.table_last_visible() != ROWS - 1:
+        print("eqoi table: the last row was not scrolled into view")
+        app.destroy()
+        return 11
+    if app.get_int(scroll) != ROWS * ROW_H - 190:
+        print("eqoi table: reveal did not scroll the minimum needed")
+        app.destroy()
+        return 12
+
+    app.inject_home()
+    draw_table(app, scroll, selected)
+    if app.get_int(selected) != 0 or app.get_int(scroll) != 0:
+        print("eqoi table: Home did not return to the first row")
+        app.destroy()
+        return 13
+
+    # ---------------------------------------------------------------
+    # The wheel scrolls anywhere over the body.
+    # ---------------------------------------------------------------
+    app.inject_mouse_move(100, 150)
+    app.inject_wheel(-1.0)
+    draw_table(app, scroll, selected)
+    if app.get_int(scroll) != 40:
+        print("eqoi table: the wheel did not scroll the table body")
+        app.destroy()
+        return 14
+    if app.table_first_visible() != 1:
+        print("eqoi table: scrolling did not move the visible window")
+        app.destroy()
+        return 15
+
+    # ---------------------------------------------------------------
+    # A header click is reported, so the application can re-sort.
+    # ---------------------------------------------------------------
+    # The Size header starts at x = 20 + 180 = 200, header spans y 20..50.
+    app.inject_mouse_move(240, 35)
+    app.inject_left_down()
+    sorted_by: i32 = -1
+    if app.begin_offscreen() == 1:
+        app.table_begin(TX, TY, TW, TH, ROW_H, ROWS, scroll, selected)
+        if app.table_column("Name", 180) == 1:
+            sorted_by = 0
+        if app.table_column("Size", 108) == 1:
+            sorted_by = 1
+        app.table_headers_end()
+        app.table_end()
+        app.end()
+    if sorted_by != 1:
+        print("eqoi table: clicking a header did not report the column")
+        app.destroy()
+        return 16
+    app.inject_left_up()
+
+    # ---------------------------------------------------------------
+    # An empty table is safe: no rows, no visible window, no crash.
+    # ---------------------------------------------------------------
+    empty_scroll: i64 = app.alloc_int(0)
+    empty_sel: i64 = app.alloc_int(-1)
+    touched: i32 = 0
+    if app.begin_offscreen() == 1:
+        app.table_begin(TX, TY, TW, TH, ROW_H, 0, empty_scroll, empty_sel)
+        app.table_column("Name", 180)
+        app.table_headers_end()
+        i: i32 = app.table_first_visible()
+        while i <= app.table_last_visible():
+            if app.table_row(i) == 1:
+                touched = touched + 1
+            i = i + 1
+        app.table_end()
+        app.end()
+    if touched != 0:
+        print("eqoi table: an empty table drew rows")
+        app.destroy()
+        return 17
+
+    app.destroy()
+    print("eqoi table: ok")
+    return 0

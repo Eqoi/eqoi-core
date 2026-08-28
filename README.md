@@ -9,7 +9,7 @@ On Linux the public API is display-server neutral. The shared `window` adapter
 uses native Wayland/xdg-shell when available and falls back to X11/XWayland;
 Eqoi does not contain display-server-specific rendering or input code.
 
-Current version: **0.12.0**
+Current version: **0.13.0**
 
 ```text
 Eqoi application
@@ -107,6 +107,7 @@ rectangle.
 - checkboxes, toggles, sliders, progress bars, and text input
 - scrollbars and clipped scrollable regions
 - tabs, dropdowns, modals, tooltips, drag sources, and drop targets
+- a virtualized data table with columns, selection, and sorting hooks
 
 All widget text measurement comes from the active `ui` surface FontFace. Eqoi
 does not hard-code glyph dimensions, so centering, carets, tabs, dropdowns, and
@@ -243,6 +244,39 @@ focus falls to the first focusable rather than vanishing.
 Space is deliberately not an activation key yet: it also arrives as a typed
 character, and until text input owns a caret there is no unambiguous way to
 tell a press from a typed space. Delete waits on the same work.
+
+## Table
+
+`table_*` is a virtualized data table. The application never hands over its
+data: it is told which rows are on screen and fills only those, so a hundred
+thousand rows cost the same frame as eight.
+
+```dolet
+app.table_begin(x, y, w, h, 24, row_count, scroll, selected)
+if app.table_column("Name", 220) == 1:
+    sort_by_name()
+app.table_column("Size", 90)
+app.table_headers_end()
+i: i32 = app.table_first_visible()
+while i <= app.table_last_visible():
+    if app.table_row(i) == 1:
+        app.table_cell(0, name_of(i))
+        app.table_cell(1, size_of(i))
+    i = i + 1
+changed: i32 = app.table_end()
+```
+
+Selection is a single row index in a caller-owned `i32`, `-1` for none, the
+same shape every other stateful widget here takes. Clicking a row selects it;
+Up, Down, Home and End move the selection and scroll the least amount that
+brings it into view. Sorting is the application's job — `table_column` returns
+1 on the frame its header is clicked and what that means is for the caller to
+decide.
+
+The keyboard and the wheel are both applied before the visible window is
+worked out. That matters more than it sounds: the event loop only wakes on
+input, so a scroll applied after the window was computed would not appear
+until some later, unrelated event.
 
 ## Text input
 

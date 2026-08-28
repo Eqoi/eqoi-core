@@ -101,6 +101,27 @@ struct EqoiApp:
     # Modal
     md_active: i32 = 0
 
+    # Table (see table.dlt)
+    tb_id: i64 = 0
+    tb_x: i32 = 0
+    tb_y: i32 = 0
+    tb_w: i32 = 0
+    tb_h: i32 = 0
+    tb_row_height: i32 = 0
+    tb_row_count: i32 = 0
+    tb_header_h: i32 = 0
+    tb_scroll_ptr: i64 = 0
+    tb_selected_ptr: i64 = 0
+    tb_col_widths: i64 = 0
+    tb_col_count: i32 = 0
+    tb_col_capacity: i32 = 0
+    tb_col_cursor: i32 = 0
+    tb_row_index: i32 = 0
+    tb_row_y: i32 = 0
+    tb_first: i32 = 0
+    tb_last: i32 = 0
+    tb_changed: i32 = 0
+
     # "Canvas size this frame" — mirrors self.width/height but kept
     # separate so responsive widgets (modal_begin) don't depend on
     # whether the caller has resized since the last sync.
@@ -215,6 +236,7 @@ attach EqoiApp:
     fun destroy(self):
         self._free_state()
         self._free_id_stack()
+        self._free_table()
         if self.commands.is_valid() == 1:
             self.commands.destroy()
         if self.surface.is_valid() == 1:
