@@ -17,6 +17,12 @@ struct EqoiTheme:
     padding: i32 = 14
     border_width: i32 = 1
     corner_radius: i32 = 6
+    # The focus ring. Thin by default: it marks where the keyboard is, and a
+    # marker that has to shout is covering for being in the wrong place.
+    # A colour of 0 means unset, and falls back to accent_hover.
+    focus_ring_width: i32 = 1
+    focus_ring_offset: i32 = 2
+    focus_ring_color: UIColor = 0
 
 attach EqoiTheme:
     static fun dark() -> EqoiTheme:
@@ -34,7 +40,10 @@ attach EqoiTheme:
             spacing=12,
             padding=14,
             border_width=1,
-            corner_radius=6
+            corner_radius=6,
+            focus_ring_width=1,
+            focus_ring_offset=2,
+            focus_ring_color=ui_rgb(229, 141, 110)
         )
 
     static fun light() -> EqoiTheme:
@@ -52,7 +61,10 @@ attach EqoiTheme:
             spacing=12,
             padding=14,
             border_width=1,
-            corner_radius=6
+            corner_radius=6,
+            focus_ring_width=1,
+            focus_ring_offset=2,
+            focus_ring_color=ui_rgb(213, 104, 72)
         )
 
 fun eqoi_theme_dark() -> EqoiTheme:

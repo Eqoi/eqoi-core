@@ -57,11 +57,11 @@ attach EqoiApp:
         commands.push_text(label_x, y + (dot - self.text_height()) / 2, label, self.theme.text)
         self.push_commands(commands)
         if focused == 1:
-            self.focus_ring(dot_x, y, dot, dot)
+            self.focus_ring_rounded(dot_x, y, dot, dot, dot / 2)
 
         take: i32 = 0
         if hovered == 1 and mouse.left_pressed() == 1:
-            self.focus_id = id
+            self.focus_by_pointer(id)
             take = 1
         if self.is_activated(id) == 1:
             take = 1
@@ -106,11 +106,11 @@ attach EqoiApp:
             if over_down == 1:
                 value = value - amount
                 moved = 1
-                self.focus_id = id
+                self.focus_by_pointer(id)
             elif over_up == 1:
                 value = value + amount
                 moved = 1
-                self.focus_id = id
+                self.focus_by_pointer(id)
 
         # Left and right step it too, so the whole control works from the
         # keyboard once it has focus.
@@ -146,7 +146,7 @@ attach EqoiApp:
         commands.push_text(field_x + (width - button_w * 2 - self.text_width(shown)) / 2, y + (height - self.text_height()) / 2, shown, self.theme.text)
         self.push_commands(commands)
         if focused == 1:
-            self.focus_ring(x, y, width, height)
+            self.focus_ring_rounded(x, y, width, height, r)
         return moved
 
     # ---------------------------------------------------------------

@@ -1,0 +1,197 @@
+import eqoi
+
+# The focus ring.
+#
+# The rule under test is that the ring follows *how* focus was taken, not
+# whether it is held: quiet for a click, drawn for the keyboard. Both halves
+# matter and they fail in opposite directions — a ring that never appears
+# looks tidy and strands anyone using Tab, and a ring that always appears
+# leaves a marker on a button nobody is looking at.
+#
+# The button sits at (40, 40, 100, 36) throughout, so with an offset of 2 the
+# ring's left edge is the single column x=38, and x=37 and x=39 must stay
+# background. Probing all three is what makes "thin" a measurement rather
+# than an impression.
+
+BUTTON_X: i32 = 40
+BUTTON_Y: i32 = 40
+BUTTON_W: i32 = 100
+BUTTON_H: i32 = 36
+
+# On the straight part of the left edge, clear of the rounded corners.
+EDGE_X: i32 = 38
+EDGE_Y: i32 = 58
+# The corner of the ring's bounding box: inked when the shape has square
+# corners, cut away when it is rounded.
+CORNER: i32 = 38
+
+fun draw_button(app: EqoiApp) -> i32:
+    fired: i32 = 0
+    if app.begin_offscreen() == 1:
+        fired = app.button(BUTTON_X, BUTTON_Y, BUTTON_W, BUTTON_H, "Go")
+        app.end()
+    return fired
+
+fun main() -> i32:
+    app: EqoiApp = EqoiApp.headless(300, 200)
+    if app.is_valid() == 0:
+        print("eqoi focusring: headless app creation failed")
+        return 1
+
+    # ---------------------------------------------------------------
+    # A click must not leave a ring behind.
+    # ---------------------------------------------------------------
+    app.inject_mouse_move(60, 58)
+    app.inject_left_down()
+    draw_button(app)
+    app.inject_left_up()
+    draw_button(app)
+
+    if app.pixel_at(EDGE_X, EDGE_Y) != app.theme.background:
+        print("eqoi focusring: a click drew a focus ring")
+        app.destroy()
+        return 2
+
+    # That check is only worth anything if the click really did take focus,
+    # so prove it: Enter fires the focused widget and nothing else.
+    if draw_button(app) == 1:
+        print("eqoi focusring: the button fired without Enter")
+        app.destroy()
+        return 3
+    app.inject_enter()
+    if draw_button(app) != 1:
+        print("eqoi focusring: the click did not move focus, so check 1 proved nothing")
+        app.destroy()
+        return 4
+
+    # Activating with Enter does not move focus, so it reveals nothing either.
+    if app.pixel_at(EDGE_X, EDGE_Y) != app.theme.background:
+        print("eqoi focusring: activation drew a ring")
+        app.destroy()
+        return 5
+
+    # ---------------------------------------------------------------
+    # Tab must draw one.
+    # ---------------------------------------------------------------
+    app.inject_tab()
+    draw_button(app)
+    if app.pixel_at(EDGE_X, EDGE_Y) != app.theme.focus_ring_color:
+        print("eqoi focusring: Tab did not draw the ring in the theme's colour")
+        app.destroy()
+        return 6
+    if app.pixel_at(EDGE_X - 1, EDGE_Y) != app.theme.background:
+        print("eqoi focusring: the ring spilled outwards")
+        app.destroy()
+        return 7
+    if app.pixel_at(EDGE_X + 1, EDGE_Y) != app.theme.background:
+        print("eqoi focusring: the ring is thicker than one pixel")
+        app.destroy()
+        return 8
+
+    # A rounded button gets rounded corners: the corner of the bounding box
+    # is outside the arc and must stay empty.
+    if app.pixel_at(CORNER, CORNER) != app.theme.background:
+        print("eqoi focusring: the ring squared off a rounded button")
+        app.destroy()
+        return 9
+
+    # It stays for later frames — focus has not moved, and neither has the eye.
+    draw_button(app)
+    if app.pixel_at(EDGE_X, EDGE_Y) != app.theme.focus_ring_color:
+        print("eqoi focusring: the ring lasted only the frame Tab was pressed")
+        app.destroy()
+        return 10
+
+    # ---------------------------------------------------------------
+    # And a click puts it away again.
+    # ---------------------------------------------------------------
+    app.inject_left_down()
+    draw_button(app)
+    app.inject_left_up()
+    draw_button(app)
+    if app.pixel_at(EDGE_X, EDGE_Y) != app.theme.background:
+        print("eqoi focusring: clicking did not put the ring away")
+        app.destroy()
+        return 11
+
+    # ---------------------------------------------------------------
+    # The two overrides.
+    # ---------------------------------------------------------------
+    app.set_focus_ring(EQOI_FOCUS_RING_ALWAYS)
+    draw_button(app)
+    if app.pixel_at(EDGE_X, EDGE_Y) != app.theme.focus_ring_color:
+        print("eqoi focusring: ALWAYS did not draw after a click")
+        app.destroy()
+        return 12
+
+    app.set_focus_ring(EQOI_FOCUS_RING_NEVER)
+    app.inject_tab()
+    draw_button(app)
+    if app.pixel_at(EDGE_X, EDGE_Y) != app.theme.background:
+        print("eqoi focusring: NEVER drew a ring for Tab")
+        app.destroy()
+        return 13
+
+    # ---------------------------------------------------------------
+    # The theme owns the thickness and the distance.
+    # ---------------------------------------------------------------
+    app.set_focus_ring(EQOI_FOCUS_RING_KEYBOARD)
+    thick: EqoiTheme = EqoiTheme.dark()
+    thick.focus_ring_width = 3
+    thick.focus_ring_offset = 5
+    app.set_theme(thick)
+    app.inject_tab()
+    draw_button(app)
+    # Five out from the button's left edge, three columns wide: 35, 36, 37.
+    if app.pixel_at(35, EDGE_Y) != thick.focus_ring_color:
+        print("eqoi focusring: the offset was not honoured")
+        app.destroy()
+        return 14
+    if app.pixel_at(37, EDGE_Y) != thick.focus_ring_color:
+        print("eqoi focusring: the width was not honoured")
+        app.destroy()
+        return 15
+    if app.pixel_at(34, EDGE_Y) != app.theme.background:
+        print("eqoi focusring: the thick ring spilled outwards")
+        app.destroy()
+        return 16
+    if app.pixel_at(38, EDGE_Y) != app.theme.background:
+        print("eqoi focusring: the thick ring is wider than it was asked for")
+        app.destroy()
+        return 17
+    app.destroy()
+
+    # ---------------------------------------------------------------
+    # A square widget gets square corners. Same geometry as the button, so
+    # the only thing that differs is the shape the ring is following.
+    # ---------------------------------------------------------------
+    b: EqoiApp = EqoiApp.headless(300, 200)
+    if b.is_valid() == 0:
+        print("eqoi focusring: the second app would not start")
+        return 18
+    choice: i64 = b.alloc_int(0)
+    b.inject_mouse_move(290, 190)
+    # Tab with nothing focused only lands focus when the frame resolves, by
+    # which time the widget has already drawn. The ring belongs to the frame
+    # after, so draw two.
+    b.inject_tab()
+    if b.begin_offscreen() == 1:
+        b.dropdown_begin(BUTTON_X, BUTTON_Y, BUTTON_W, BUTTON_H, choice, "One")
+        b.dropdown_end()
+        b.end()
+    if b.begin_offscreen() == 1:
+        b.dropdown_begin(BUTTON_X, BUTTON_Y, BUTTON_W, BUTTON_H, choice, "One")
+        b.dropdown_end()
+        b.end()
+    if b.pixel_at(EDGE_X, EDGE_Y) != b.theme.focus_ring_color:
+        print("eqoi focusring: the square widget drew no ring at all")
+        b.destroy()
+        return 19
+    if b.pixel_at(CORNER, CORNER) != b.theme.focus_ring_color:
+        print("eqoi focusring: the ring rounded off a square widget")
+        b.destroy()
+        return 20
+
+    b.destroy()
+    print("eqoi focusring: ok")
+    return 0

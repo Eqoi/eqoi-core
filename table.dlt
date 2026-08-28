@@ -267,7 +267,7 @@ attach EqoiApp:
         self.push_commands(commands)
 
         if hovered == 1 and mouse.left_pressed() == 1:
-            self.focus_id = self.tb_id
+            self.focus_by_pointer(self.tb_id)
             if self.tb_selected_ptr != 0 and selected != index:
                 Memory.write_i32(self.tb_selected_ptr, index)
                 self.tb_changed = 1
@@ -315,7 +315,7 @@ attach EqoiApp:
 
         commands: UIDrawList = self.commands
         if self.focus_id == self.tb_id:
-            self.focus_ring(self.tb_x, self.tb_y, self.tb_w, self.tb_h)
+            self.focus_ring_rounded(self.tb_x, self.tb_y, self.tb_w, self.tb_h, 0)
         self.push_commands(commands)
         return self.tb_changed
 

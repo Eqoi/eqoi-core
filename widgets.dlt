@@ -77,14 +77,14 @@ attach EqoiApp:
         commands.push_text(x + (width - label_w) / 2, y + (height - self.text_height()) / 2, label, self.theme.text)
         self.push_commands(commands)
         if focused == 1:
-            self.focus_ring(x, y, width, height)
+            self.focus_ring_rounded(x, y, width, height, r)
 
         # Track hover for tooltip support.
         if hovered == 1:
             self.set_hover(id)
 
         if hovered == 1 and mouse.left_pressed() == 1:
-            self.focus_id = id
+            self.focus_by_pointer(id)
             return 1
         if self.is_activated(id) == 1:
             return 1
@@ -109,14 +109,14 @@ attach EqoiApp:
         commands.push_text(x + (width - label_w) / 2, y + (height - self.text_height()) / 2, label, self.theme.text)
         self.push_commands(commands)
         if focused == 1:
-            self.focus_ring(x, y, width, height)
+            self.focus_ring_rounded(x, y, width, height, r)
 
         # Track hover for tooltip support.
         if hovered == 1:
             self.set_hover(id)
 
         if hovered == 1 and mouse.left_pressed() == 1:
-            self.focus_id = id
+            self.focus_by_pointer(id)
             return 1
         if self.is_activated(id) == 1:
             return 1
@@ -167,11 +167,11 @@ attach EqoiApp:
         commands.push_text(label_x, y + (box - self.text_height()) / 2, label, self.theme.text)
         self.push_commands(commands)
         if focused == 1:
-            self.focus_ring(box_x, y, box, box)
+            self.focus_ring_rounded(box_x, y, box, box, 0)
 
         activated: i32 = 0
         if hovered == 1 and mouse.left_pressed() == 1:
-            self.focus_id = id
+            self.focus_by_pointer(id)
             activated = 1
         if self.is_activated(id) == 1:
             activated = 1
@@ -224,11 +224,11 @@ attach EqoiApp:
         commands.push_text(toggle_label_x, y + (h - self.text_height()) / 2, label, self.theme.text)
         self.push_commands(commands)
         if focused == 1:
-            self.focus_ring(track_x, y, w, h)
+            self.focus_ring_rounded(track_x, y, w, h, h / 2)
 
         activated: i32 = 0
         if hovered == 1 and mouse.left_pressed() == 1:
-            self.focus_id = id
+            self.focus_by_pointer(id)
             activated = 1
         if self.is_activated(id) == 1:
             activated = 1
@@ -263,7 +263,7 @@ attach EqoiApp:
         # If user pressed on the track, grab drag ownership
         if hovered == 1 and mouse.left_pressed() == 1:
             self.drag_id = id
-            self.focus_id = id
+            self.focus_by_pointer(id)
 
         changed: i32 = 0
         # Left/right move the value in twentieths of the range, so a slider
@@ -326,7 +326,7 @@ attach EqoiApp:
         commands.push_fill_circle(knob_x, y + h / 2, knob_r, knob_color)
         self.push_commands(commands)
         if focused == 1:
-            self.focus_ring(x, y, width, h)
+            self.focus_ring_rounded(x, y, width, h, h / 2)
         return changed
 
     # ---------------------------------------------------------------
@@ -386,7 +386,7 @@ attach EqoiApp:
         # Click to focus; click elsewhere to unfocus.
         if mouse.left_pressed() == 1:
             if hovered == 1:
-                self.focus_id = id
+                self.focus_by_pointer(id)
             elif self.focus_id == id:
                 self.focus_id = 0
 
@@ -692,7 +692,7 @@ attach EqoiApp:
         changed: i32 = 0
         picked: i32 = 0
         if hovered == 1 and mouse.left_pressed() == 1:
-            self.focus_id = id
+            self.focus_by_pointer(id)
             picked = 1
         if self.is_activated(id) == 1:
             picked = 1
@@ -740,7 +740,7 @@ attach EqoiApp:
 
         toggled: i32 = 0
         if hovered == 1 and mouse.left_pressed() == 1:
-            self.focus_id = id
+            self.focus_by_pointer(id)
             toggled = 1
         if self.is_activated(id) == 1:
             toggled = 1
@@ -769,7 +769,7 @@ attach EqoiApp:
         commands.push_line(chev_cx,     chev_cy + 2, chev_cx + 4, chev_cy - 2, self.theme.muted_text, 1)
         self.push_commands(commands)
         if focused == 1:
-            self.focus_ring(x, y, width, height)
+            self.focus_ring_rounded(x, y, width, height, 0)
         return is_open
 
     fun dropdown_item(self, label: str) -> i32:

@@ -433,8 +433,7 @@ order, and the traversal settles in one pass.
 - **Escape** closes an open dropdown.
 - **Left/Right** move a focused slider by a twentieth of its range, so a slider
   is usable without a pointer at any range size.
-- A focus ring is drawn outside the focused widget, because keyboard focus
-  nobody can see is not keyboard support.
+- A focus ring is drawn when focus was taken by the keyboard. See below.
 
 If the focused widget stops being drawn — a tab switched, a panel collapsed —
 focus falls to the first focusable rather than vanishing.
@@ -442,6 +441,51 @@ focus falls to the first focusable rather than vanishing.
 Space is deliberately not an activation key yet: it also arrives as a typed
 character, and until text input owns a caret there is no unambiguous way to
 tell a press from a typed space. Delete waits on the same work.
+
+## The focus ring
+
+The ring follows **how** focus was taken, not merely whether it is held.
+
+A ring that appears when you click is noise: the click already said where you
+are, the pointer is still sitting there, and the ring then lingers on a button
+nobody is looking at any more. A ring that appears when you Tab is the only
+thing saying where you are at all. So clicking is quiet and the keyboard draws.
+
+Turning the ring off outright would fix the click and lose the keyboard, which
+is the trade nobody wants and everybody makes.
+
+Tab and the arrow, Home and End keys reveal it — anything that moves a
+selection means the hands have left the mouse. Enter does not: it fires the
+focused widget without moving focus, so there is nothing new to point at.
+
+```dolet
+app.set_focus_ring(EQOI_FOCUS_RING_ALWAYS)   # after a click too
+app.set_focus_ring(EQOI_FOCUS_RING_NEVER)    # never
+app.set_focus_ring(EQOI_FOCUS_RING_KEYBOARD) # the default
+```
+
+The ring follows the widget's own corner: a square checkbox gets square
+corners, a rounded button gets the button's radius, a pill toggle gets a pill,
+and a round radio gets a circle. A widget of your own passes its radius:
+
+```dolet
+app.focus_ring_rounded(x, y, width, height, radius)
+app.focus_ring(x, y, width, height)          # the theme's radius
+```
+
+Thickness, distance and colour are the theme's:
+
+```dolet
+theme: EqoiTheme = EqoiTheme.dark()
+theme.focus_ring_width = 2      # 1 by default
+theme.focus_ring_offset = 3     # 2 by default, measured outwards
+theme.focus_ring_color = ui_rgb(120, 200, 255)   # 0 falls back to accent_hover
+app.set_theme(theme)
+```
+
+`request_focus` counts as keyboard focus: moving focus from application code is
+a deliberate act of direction, so the ring shows. `focus_by_pointer` is what a
+widget calls when a click put focus there.
 
 ## Animation
 

@@ -15,6 +15,23 @@
 # Widgets report focus themselves rather than being told, because a widget
 # that is never drawn must not be reachable by Tab.
 
+# ---------------------------------------------------------------
+# When the ring is drawn
+# ---------------------------------------------------------------
+# A ring that appears on a click is noise. The click already said where you
+# are, the pointer is still sitting there, and the ring then lingers on a
+# button nobody is looking at any more.
+#
+# A ring that appears on Tab is the only thing saying where you are at all.
+#
+# So the ring follows *how* focus was taken, not merely whether it is held:
+# quiet for the pointer, drawn for the keyboard. Turning the ring off outright
+# would fix the click and lose the keyboard, which is the trade nobody wants
+# and everybody makes.
+EQOI_FOCUS_RING_KEYBOARD: i32 = 0
+EQOI_FOCUS_RING_ALWAYS: i32 = 1
+EQOI_FOCUS_RING_NEVER: i32 = 2
+
 attach EqoiApp:
     fun begin_focus_frame(self):
         self.focus_move = 0
@@ -30,6 +47,16 @@ attach EqoiApp:
         self.focus_prev = 0
         self.focus_seen = 0
         self.focus_found = 0
+        # Any key that moves a selection means the hands have left the mouse,
+        # which is exactly when a ring earns its place. Arrows count: they are
+        # how a focused slider or table is driven, and someone driving one is
+        # navigating by keyboard whatever put the focus there first.
+        if self.input_state.tab_pressed == 1 or self.input_state.left_pressed == 1 or self.input_state.right_pressed == 1:
+            self.focus_visible = 1
+        if self.input_state.up_pressed == 1 or self.input_state.down_pressed == 1:
+            self.focus_visible = 1
+        if self.input_state.home_pressed == 1 or self.input_state.end_pressed == 1:
+            self.focus_visible = 1
 
     # Enter this widget into the frame's tab order. Returns 1 if it holds
     # keyboard focus once this call has been accounted for.
@@ -130,13 +157,51 @@ attach EqoiApp:
     # ---------------------------------------------------------------
     # Focus ring
     # ---------------------------------------------------------------
-    # Keyboard focus nobody can see is not keyboard support. Drawn outside
-    # the widget so it never covers content.
-    fun focus_ring(self, x: i32, y: i32, width: i32, height: i32):
-        r: i32 = self.theme.corner_radius
+    # Focus taken by pointing at something. The ring stays quiet: the pointer
+    # said it already.
+    fun focus_by_pointer(self, id: i64):
+        self.focus_id = id
+        self.focus_visible = 0
+
+    # Focus taken by the keyboard, for a widget that moves focus itself.
+    fun focus_by_keyboard(self, id: i64):
+        self.focus_id = id
+        self.focus_visible = 1
+
+    # EQOI_FOCUS_RING_KEYBOARD (the default), _ALWAYS or _NEVER.
+    fun set_focus_ring(self, mode: i32):
+        self.focus_ring_mode = mode
+
+    fun focus_ring_shown(self) -> i32:
+        if self.focus_ring_mode == EQOI_FOCUS_RING_NEVER:
+            return 0
+        if self.focus_ring_mode == EQOI_FOCUS_RING_ALWAYS:
+            return 1
+        return self.focus_visible
+
+    # Drawn outside the widget so it never covers content, and following the
+    # widget's own corner: a square checkbox gets square corners and a round
+    # radio gets a circle. Adding the gap to the radius keeps the ring
+    # concentric with the shape rather than merely near it.
+    fun focus_ring_rounded(self, x: i32, y: i32, width: i32, height: i32, radius: i32):
+        if self.focus_ring_shown() == 0:
+            return
+        thickness: i32 = self.theme.focus_ring_width
+        if thickness < 1:
+            return
+        gap: i32 = self.theme.focus_ring_offset
+        if gap < 0:
+            gap = 0
+        color: UIColor = self.theme.focus_ring_color
+        if color == 0:
+            color = self.theme.accent_hover
         commands: UIDrawList = self.commands
-        if r > 0:
-            commands.push_outline_rounded_rect(x - 2, y - 2, width + 4, height + 4, r + 2, self.theme.accent_hover, 2)
+        if radius > 0:
+            commands.push_outline_rounded_rect(x - gap, y - gap, width + gap * 2, height + gap * 2, radius + gap, color, thickness)
         else:
-            commands.push_outline_rect(x - 2, y - 2, width + 4, height + 4, self.theme.accent_hover, 2)
+            commands.push_outline_rect(x - gap, y - gap, width + gap * 2, height + gap * 2, color, thickness)
         self.push_commands(commands)
+
+    # For a widget whose corner is the theme's.
+    fun focus_ring(self, x: i32, y: i32, width: i32, height: i32):
+        self.focus_ring_rounded(x, y, width, height, self.theme.corner_radius)
