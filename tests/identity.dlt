@@ -1,0 +1,247 @@
+import eqoi
+
+# Identity tests. Every one of these drives a real gesture across frames and
+# asserts on retained state — focus and drag ownership — which is exactly the
+# state that a position-derived identity loses.
+#
+# Slider geometry used throughout: x=100, width=200, range 0..100, so the
+# value is (mouse_x - 100) / 2 while the drag is owned.
+
+SLIDER_X: i32 = 100
+SLIDER_W: i32 = 200
+
+fun drag_across_a_move(app: EqoiApp, value: i64, scoped: i32) -> i32:
+    # Frame 1: pointer on the slider, nothing held.
+    app.inject_mouse_move(SLIDER_X + 10, 105)
+    if app.begin_offscreen() == 1:
+        if scoped == 1:
+            app.push_id_str("volume")
+        app.slider(SLIDER_X, 100, SLIDER_W, 0, 100, value)
+        if scoped == 1:
+            app.pop_id()
+        app.end()
+
+    # Frame 2: press. The slider takes drag ownership and tracks.
+    app.inject_left_down()
+    if app.begin_offscreen() == 1:
+        if scoped == 1:
+            app.push_id_str("volume")
+        app.slider(SLIDER_X, 100, SLIDER_W, 0, 100, value)
+        if scoped == 1:
+            app.pop_id()
+        app.end()
+
+    # Frame 3: drag right, slider still in place.
+    app.inject_mouse_move(SLIDER_X + 150, 105)
+    if app.begin_offscreen() == 1:
+        if scoped == 1:
+            app.push_id_str("volume")
+        app.slider(SLIDER_X, 100, SLIDER_W, 0, 100, value)
+        if scoped == 1:
+            app.pop_id()
+        app.end()
+
+    # Frame 4: the layout moves the slider down mid-gesture. The pointer is
+    # still held and still dragging.
+    app.inject_mouse_move(SLIDER_X + 180, 105)
+    if app.begin_offscreen() == 1:
+        if scoped == 1:
+            app.push_id_str("volume")
+        app.slider(SLIDER_X, 140, SLIDER_W, 0, 100, value)
+        if scoped == 1:
+            app.pop_id()
+        app.end()
+
+    return app.get_int(value)
+
+fun main() -> i32:
+    # ---------------------------------------------------------------
+    # Without a pushed identity, position IS the identity: a slider that
+    # moves mid-drag becomes a different widget and drops the gesture.
+    # ---------------------------------------------------------------
+    a: EqoiApp = EqoiApp.headless(400, 300)
+    if a.is_valid() == 0:
+        print("eqoi identity: headless app creation failed")
+        return 1
+    unscoped_value: i64 = a.alloc_int(0)
+    unscoped: i32 = drag_across_a_move(a, unscoped_value, 0)
+    if unscoped != 75:
+        print("eqoi identity: unscoped slider did not stop tracking after it moved")
+        a.destroy()
+        return 2
+    a.destroy()
+
+    # ---------------------------------------------------------------
+    # With a pushed identity, position is irrelevant and the gesture
+    # survives the move.
+    # ---------------------------------------------------------------
+    b: EqoiApp = EqoiApp.headless(400, 300)
+    if b.is_valid() == 0:
+        print("eqoi identity: headless app creation failed")
+        return 3
+    scoped_value: i64 = b.alloc_int(0)
+    scoped: i32 = drag_across_a_move(b, scoped_value, 1)
+    if scoped != 90:
+        print("eqoi identity: scoped slider lost its drag when it moved")
+        b.destroy()
+        return 4
+    b.destroy()
+
+    # ---------------------------------------------------------------
+    # Two sliders sharing one rectangle. Unscoped they share an identity,
+    # so a drag meant for one drives both. Scoped they stay separate.
+    # ---------------------------------------------------------------
+    c: EqoiApp = EqoiApp.headless(400, 300)
+    if c.is_valid() == 0:
+        print("eqoi identity: headless app creation failed")
+        return 5
+    left: i64 = c.alloc_int(0)
+    right: i64 = c.alloc_int(0)
+
+    c.inject_mouse_move(SLIDER_X + 10, 105)
+    if c.begin_offscreen() == 1:
+        c.push_id_str("left")
+        c.slider(SLIDER_X, 100, SLIDER_W, 0, 100, left)
+        c.pop_id()
+        c.push_id_str("right")
+        c.slider(SLIDER_X, 100, SLIDER_W, 0, 100, right)
+        c.pop_id()
+        c.end()
+
+    c.inject_left_down()
+    c.inject_mouse_move(SLIDER_X + 60, 105)
+    if c.begin_offscreen() == 1:
+        c.push_id_str("left")
+        c.slider(SLIDER_X, 100, SLIDER_W, 0, 100, left)
+        c.pop_id()
+        c.push_id_str("right")
+        c.slider(SLIDER_X, 100, SLIDER_W, 0, 100, right)
+        c.pop_id()
+        c.end()
+
+    # On the press frame both claim the drag and both compute a value, since
+    # each sets ownership and then reads it back in the same call. Ownership
+    # is settled by the frame after: only the last claimer keeps tracking.
+    if c.get_int(left) != 30 or c.get_int(right) != 30:
+        print("eqoi identity: sliders did not both track on the press frame")
+        c.destroy()
+        return 6
+
+    c.inject_mouse_move(SLIDER_X + 100, 105)
+    if c.begin_offscreen() == 1:
+        c.push_id_str("left")
+        c.slider(SLIDER_X, 100, SLIDER_W, 0, 100, left)
+        c.pop_id()
+        c.push_id_str("right")
+        c.slider(SLIDER_X, 100, SLIDER_W, 0, 100, right)
+        c.pop_id()
+        c.end()
+    if c.get_int(left) != 30:
+        print("eqoi identity: a slider kept tracking after losing the drag")
+        c.destroy()
+        return 21
+    if c.get_int(right) != 50:
+        print("eqoi identity: the drag owner stopped tracking")
+        c.destroy()
+        return 22
+    c.destroy()
+
+    # ---------------------------------------------------------------
+    # Stack mechanics: nesting composes, popping restores, and a cleared
+    # stack returns the widget to position-derived identity.
+    # ---------------------------------------------------------------
+    d: EqoiApp = EqoiApp.headless(200, 200)
+    if d.is_valid() == 0:
+        print("eqoi identity: headless app creation failed")
+        return 7
+
+    positional: i64 = d.widget_id(1, 10, 20)
+    if d.current_id() != 0:
+        print("eqoi identity: a fresh app reports a pushed identity")
+        d.destroy()
+        return 8
+
+    d.push_id_str("panel")
+    outer: i64 = d.current_id()
+    if outer == 0:
+        print("eqoi identity: push_id_str produced no identity")
+        d.destroy()
+        return 9
+    scoped_id: i64 = d.widget_id(1, 10, 20)
+    if scoped_id == positional:
+        print("eqoi identity: a pushed identity did not displace position")
+        d.destroy()
+        return 10
+    # Same scope, different position: identity must not move with the widget.
+    if d.widget_id(1, 99, 99) != scoped_id:
+        print("eqoi identity: a scoped widget changed identity when it moved")
+        d.destroy()
+        return 11
+    # Same scope, different widget kind: identities must stay distinct.
+    if d.widget_id(2, 10, 20) == scoped_id:
+        print("eqoi identity: two widget kinds collided inside one scope")
+        d.destroy()
+        return 12
+
+    d.push_id_int(0)
+    first_item: i64 = d.widget_id(1, 10, 20)
+    d.pop_id()
+    d.push_id_int(1)
+    second_item: i64 = d.widget_id(1, 10, 20)
+    d.pop_id()
+    if first_item == second_item:
+        print("eqoi identity: nested integer scopes collided")
+        d.destroy()
+        return 13
+    if first_item == scoped_id or second_item == scoped_id:
+        print("eqoi identity: a nested scope did not fold in its parent")
+        d.destroy()
+        return 14
+    if d.current_id() != outer:
+        print("eqoi identity: pop_id did not restore the parent scope")
+        d.destroy()
+        return 15
+
+    d.pop_id()
+    if d.current_id() != 0:
+        print("eqoi identity: the stack did not unwind to empty")
+        d.destroy()
+        return 16
+    if d.widget_id(1, 10, 20) != positional:
+        print("eqoi identity: an empty stack did not restore position identity")
+        d.destroy()
+        return 17
+
+    # Over-popping is harmless, and clear_id_stack drops every scope.
+    d.pop_id()
+    d.pop_id()
+    d.push_id_str("a")
+    d.push_id_str("b")
+    d.clear_id_stack()
+    if d.current_id() != 0 or d.widget_id(1, 10, 20) != positional:
+        print("eqoi identity: clear_id_stack left a scope behind")
+        d.destroy()
+        return 18
+
+    # The stack survives being grown past its initial capacity.
+    i: i32 = 0
+    while i < 64:
+        d.push_id_int(i)
+        i = i + 1
+    deep: i64 = d.current_id()
+    if deep == 0:
+        print("eqoi identity: the stack failed to grow")
+        d.destroy()
+        return 19
+    i = 0
+    while i < 64:
+        d.pop_id()
+        i = i + 1
+    if d.current_id() != 0:
+        print("eqoi identity: a grown stack did not unwind")
+        d.destroy()
+        return 20
+
+    d.destroy()
+    print("eqoi identity: ok")
+    return 0

@@ -13,6 +13,7 @@ type UIColor = i32
 load eqoi/theme
 load eqoi/layout
 load eqoi/app
+load eqoi/identity
 load eqoi/widgets
 load eqoi/headless
 

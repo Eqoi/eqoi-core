@@ -1,0 +1,109 @@
+# ============================
+#  Eqoi Widget Identity
+# ============================
+# Widget state that outlives a frame — focus, drag ownership, hover age, and
+# whether a dropdown is open — is keyed by an identity hash. With nothing
+# pushed, that hash is derived from the widget's position, which is what an
+# immediate-mode loop can infer on its own.
+#
+# Position is a poor identity the moment a widget moves. A slider dragged
+# while the window resizes, a focused text input inside a scrolling panel, an
+# open dropdown in a reflowing layout: each becomes a different widget mid-
+# gesture and drops the state the gesture depended on. Two widgets that occupy
+# the same rectangle in different branches of a frame have the opposite
+# problem — they share state that was never meant to be shared.
+#
+# push_id gives the caller a say. While an identity is pushed, it REPLACES
+# position in the hash, so the widget keeps its identity wherever layout puts
+# it. Pushes nest, so a reusable component can seed itself once per item and
+# every widget inside it inherits a distinct scope.
+#
+#     i: i32 = 0
+#     while i < row_count:
+#         app.push_id_int(i)                  # one scope per row
+#         app.slider(x, y - scroll, w, 0, 100, volume)
+#         app.pop_id()
+#         i = i + 1
+#
+# Callers that push nothing keep the previous behaviour exactly.
+
+EQOI_ID_STACK_INITIAL: i32 = 16
+
+attach EqoiApp:
+    # FNV-1a. Same basis and prime as widget_id, so pushed and unpushed
+    # identities live in one hash space.
+    fun mix_id(self, seed: i64, value: i64) -> i64:
+        prime: i64 = 1099511628211 as i64
+        return (seed ^ value) * prime
+
+    fun hash_str(self, value: str) -> i64:
+        h: i64 = 14695981039346656037 as i64
+        length: i64 = Memory.strlen(value)
+        i: i64 = 0
+        b: i8 = 0 as i8
+        while i < length:
+            b = Memory.read_i8((value as i64) + i)
+            h = self.mix_id(h, b as i64)
+            i = i + 1
+        return h
+
+    # The identity in force, or 0 when the caller has pushed nothing.
+    fun current_id(self) -> i64:
+        if self.id_depth <= 0:
+            return 0
+        return Memory.read_i64(self.id_stack + ((self.id_depth - 1) as i64) * 8)
+
+    fun _grow_id_stack(self) -> i32:
+        if self.id_stack == 0:
+            self.id_stack = Memory.malloc_zeroed((EQOI_ID_STACK_INITIAL as i64) * 8)
+            if self.id_stack == 0:
+                return 0
+            self.id_capacity = EQOI_ID_STACK_INITIAL
+            return 1
+        if self.id_depth < self.id_capacity:
+            return 1
+        next_capacity: i32 = self.id_capacity * 2
+        next_stack: i64 = Memory.realloc(self.id_stack, (next_capacity as i64) * 8)
+        if next_stack == 0:
+            return 0
+        self.id_stack = next_stack
+        self.id_capacity = next_capacity
+        return 1
+
+    # Push a scope. The new identity folds into the one already in force, so
+    # nesting composes instead of colliding.
+    fun push_id(self, seed: i64) -> i32:
+        if self._grow_id_stack() == 0:
+            return 0
+        parent: i64 = 14695981039346656037 as i64
+        if self.id_depth > 0:
+            parent = self.current_id()
+        combined: i64 = self.mix_id(parent, seed)
+        if combined == 0:
+            combined = 1
+        Memory.write_i64(self.id_stack + (self.id_depth as i64) * 8, combined)
+        self.id_depth = self.id_depth + 1
+        return 1
+
+    fun push_id_int(self, seed: i32) -> i32:
+        return self.push_id(seed as i64)
+
+    fun push_id_str(self, label: str) -> i32:
+        return self.push_id(self.hash_str(label))
+
+    fun pop_id(self):
+        if self.id_depth > 0:
+            self.id_depth = self.id_depth - 1
+
+    # Drop every scope. Call between top-level sections if a frame bails out
+    # of a nested block early, so one unbalanced pop cannot leak into the
+    # rest of the frame.
+    fun clear_id_stack(self):
+        self.id_depth = 0
+
+    fun _free_id_stack(self):
+        if self.id_stack != 0:
+            Memory.free(self.id_stack)
+        self.id_stack = 0
+        self.id_depth = 0
+        self.id_capacity = 0

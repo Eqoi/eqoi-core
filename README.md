@@ -9,7 +9,7 @@ On Linux the public API is display-server neutral. The shared `window` adapter
 uses native Wayland/xdg-shell when available and falls back to X11/XWayland;
 Eqoi does not contain display-server-specific rendering or input code.
 
-Current version: **0.8.0**
+Current version: **0.9.0**
 
 ```text
 Eqoi application
@@ -130,6 +130,46 @@ not one, because that is what it is in an immediate-mode loop.
 `pixel_at(x, y)` reads back a rendered pixel once `end()` has flushed the frame,
 and `resize_offscreen(width, height)` moves the canvas so responsive layout can
 be exercised without a window manager. `tests/widgets.dlt` uses all of it.
+
+## Widget identity
+
+State that outlives a frame — focus, drag ownership, hover age, whether a
+dropdown is open — is keyed by an identity hash. With nothing pushed, that hash
+is derived from the widget's position, which is all an immediate-mode loop can
+infer on its own.
+
+Position stops being a usable identity the moment a widget moves. A slider
+dragged while the window resizes, a focused text input inside a scrolling
+panel, an open dropdown in a reflowing layout: each becomes a different widget
+mid-gesture and drops the state the gesture depended on.
+
+`push_id` gives the caller a say. While an identity is pushed it **replaces**
+position in the hash, so the widget keeps its identity wherever layout puts it.
+
+```dolet
+app.push_id_str("volume")
+app.slider(x, y - scroll, width, 0, 100, volume)   # survives scrolling
+app.pop_id()
+```
+
+Pushes nest, so a reusable component can seed itself once per item and every
+widget inside it gets a distinct scope:
+
+```dolet
+i: i32 = 0
+while i < row_count:
+    app.push_id_int(i)
+    app.checkbox(x, y, "Selected", row_flag(i))
+    app.pop_id()
+    i = i + 1
+```
+
+`push_id(seed: i64)`, `push_id_int`, and `push_id_str` all fold into the scope
+already in force. `pop_id()` restores the parent and is harmless when the stack
+is empty; `clear_id_stack()` drops every scope, which is worth calling between
+top-level sections if a frame can leave a nested block early.
+
+Callers that push nothing behave exactly as they did before `push_id` existed.
 
 ## Boundaries
 

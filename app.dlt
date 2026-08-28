@@ -32,6 +32,11 @@ struct EqoiApp:
     hover_seen: i32 = 0
     frame_counter: i32 = 0
 
+    # ---- Identity stack (see identity.dlt) ----
+    id_stack: i64 = 0
+    id_depth: i32 = 0
+    id_capacity: i32 = 0
+
     # ---- Drag and drop ----
     drag_payload: i64 = 0
 
@@ -177,6 +182,7 @@ attach EqoiApp:
 
     fun destroy(self):
         self._free_state()
+        self._free_id_stack()
         if self.commands.is_valid() == 1:
             self.commands.destroy()
         if self.surface.is_valid() == 1:
@@ -294,10 +300,10 @@ attach EqoiApp:
             window_consume_backspace()
         )
         self.input_state.set_navigation(
-            key_just_pressed(46),
-            key_just_pressed(13),
-            key_just_pressed(9),
-            key_just_pressed(27),
+            key_just_pressed(KEY_DELETE),
+            key_just_pressed(KEY_ENTER),
+            key_just_pressed(KEY_TAB),
+            key_just_pressed(KEY_ESCAPE),
             shift_pressed(),
             ctrl_pressed(),
             alt_pressed()
@@ -319,13 +325,19 @@ attach EqoiApp:
     # ---------------------------------------------------------------
     # Widget identity helpers
     # ---------------------------------------------------------------
+    # A pushed identity REPLACES position, so the widget keeps its identity
+    # wherever layout moves it. With nothing pushed the hash stays derived
+    # from position, exactly as before push_id existed.
     fun widget_id(self, type_tag: i32, x: i32, y: i32) -> i64:
         base: i64 = 14695981039346656037 as i64
         prime: i64 = 1099511628211 as i64
         h: i64 = base
         h = (h ^ (type_tag as i64)) * prime
-        h = (h ^ (x as i64)) * prime
-        h = (h ^ (y as i64)) * prime
+        if self.id_depth > 0:
+            h = (h ^ self.current_id()) * prime
+        else:
+            h = (h ^ (x as i64)) * prime
+            h = (h ^ (y as i64)) * prime
         if h == 0:
             return 1
         return h
