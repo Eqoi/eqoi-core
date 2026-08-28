@@ -1,0 +1,195 @@
+import eqoi
+
+# Animation, driven by an injected frame duration rather than a clock, so the
+# numbers below are exact rather than approximate.
+#
+# At 10000us per frame and a rate of 1000 units per second, a value moves
+# 10 units per frame: 1000 * 10000 / 1000000.
+
+fun main() -> i32:
+    app: EqoiApp = EqoiApp.headless(400, 300)
+    if app.is_valid() == 0:
+        print("eqoi anim: headless app creation failed")
+        return 1
+    app.inject_delta_us(10000)
+    id: i64 = app.widget_id(1, 10, 20)
+
+    # ---------------------------------------------------------------
+    # First sight starts at the target: a widget must not fade in from
+    # nothing on the frame it appears.
+    # ---------------------------------------------------------------
+    v: i32 = 0
+    if app.begin_offscreen() == 1:
+        v = app.anim(id, 0, 1000)
+        app.end()
+    if v != 0:
+        print("eqoi anim: a fresh value did not start at its target")
+        app.destroy()
+        return 2
+    if app.animating() != 0:
+        print("eqoi anim: a settled value reported movement")
+        app.destroy()
+        return 3
+
+    # A value that appears at 100 stays at 100, rather than racing up to it.
+    other: i64 = app.widget_id(1, 99, 99)
+    if app.begin_offscreen() == 1:
+        v = app.anim(other, 100, 1000)
+        app.end()
+    if v != 100:
+        print("eqoi anim: a fresh value animated toward its first target")
+        app.destroy()
+        return 4
+
+    # ---------------------------------------------------------------
+    # Once the target moves, the value walks there at the stated rate.
+    # ---------------------------------------------------------------
+    if app.begin_offscreen() == 1:
+        v = app.anim(id, 100, 1000)
+        app.end()
+    if v != 10:
+        print("eqoi anim: the first step is the wrong size")
+        app.destroy()
+        return 5
+    if app.animating() != 1:
+        print("eqoi anim: a moving value did not report movement")
+        app.destroy()
+        return 6
+
+    if app.begin_offscreen() == 1:
+        v = app.anim(id, 100, 1000)
+        app.end()
+    if v != 20:
+        print("eqoi anim: the second step is the wrong size")
+        app.destroy()
+        return 7
+
+    # Nine more frames land exactly on the target and stop there.
+    i: i32 = 0
+    while i < 8:
+        if app.begin_offscreen() == 1:
+            v = app.anim(id, 100, 1000)
+            app.end()
+        i = i + 1
+    if v != 100:
+        print("eqoi anim: the value did not reach its target on schedule")
+        app.destroy()
+        return 8
+    if app.animating() != 0:
+        print("eqoi anim: the value kept moving after arriving")
+        app.destroy()
+        return 9
+
+    if app.begin_offscreen() == 1:
+        v = app.anim(id, 100, 1000)
+        app.end()
+    if v != 100 or app.animating() != 0:
+        print("eqoi anim: a settled value drifted past its target")
+        app.destroy()
+        return 10
+
+    # ---------------------------------------------------------------
+    # A longer frame moves further: the rate is per second, not per frame.
+    # ---------------------------------------------------------------
+    app.inject_delta_us(20000)
+    if app.begin_offscreen() == 1:
+        v = app.anim(id, 0, 1000)
+        app.end()
+    if v != 80:
+        print("eqoi anim: a longer frame did not move proportionally further")
+        app.destroy()
+        return 11
+    app.inject_delta_us(10000)
+
+    # ---------------------------------------------------------------
+    # Values are keyed by identity, so two widgets do not share one.
+    # ---------------------------------------------------------------
+    a: i64 = app.widget_id(2, 1, 1)
+    b: i64 = app.widget_id(2, 2, 2)
+    if app.begin_offscreen() == 1:
+        app.anim(a, 0, 1000)
+        app.anim(b, 0, 1000)
+        app.end()
+    av: i32 = 0
+    bv: i32 = 0
+    if app.begin_offscreen() == 1:
+        av = app.anim(a, 100, 1000)
+        bv = app.anim(b, 0, 1000)
+        app.end()
+    if av != 10 or bv != 0:
+        print("eqoi anim: two identities shared one animated value")
+        app.destroy()
+        return 12
+
+    # ---------------------------------------------------------------
+    # The store grows past its initial capacity without losing values.
+    # ---------------------------------------------------------------
+    if app.begin_offscreen() == 1:
+        k: i32 = 0
+        while k < 400:
+            app.anim(app.widget_id(9, k, 0), 50, 1000)
+            k = k + 1
+        app.end()
+    if app.begin_offscreen() == 1:
+        v = app.anim(app.widget_id(9, 7, 0), 50, 1000)
+        app.end()
+    if v != 50:
+        print("eqoi anim: a value was lost when the store grew")
+        app.destroy()
+        return 13
+
+    app.destroy()
+
+    # ---------------------------------------------------------------
+    # A widget really animates: a button's fill passes through a colour
+    # that is neither its resting nor its hovered one.
+    # ---------------------------------------------------------------
+    w: EqoiApp = EqoiApp.headless(200, 120)
+    if w.is_valid() == 0:
+        print("eqoi anim: headless app creation failed")
+        return 14
+    w.inject_delta_us(10000)
+
+    # Settle un-hovered first, so the hover has somewhere to travel from.
+    w.inject_mouse_move(190, 110)
+    if w.begin_offscreen() == 1:
+        w.button(20, 20, 120, 40, "Go")
+        w.end()
+    resting: UIColor = w.pixel_at(80, 40)
+
+    # Hover, and let it travel half way.
+    w.inject_mouse_move(80, 40)
+    i = 0
+    mid: UIColor = 0
+    while i < 5:
+        if w.begin_offscreen() == 1:
+            w.button(20, 20, 120, 40, "Go")
+            w.end()
+        i = i + 1
+    mid = w.pixel_at(80, 40)
+
+    # Then let it finish.
+    i = 0
+    while i < 20:
+        if w.begin_offscreen() == 1:
+            w.button(20, 20, 120, 40, "Go")
+            w.end()
+        i = i + 1
+    settled: UIColor = w.pixel_at(80, 40)
+
+    if resting == settled:
+        print("eqoi anim: hovering did not change the button at all")
+        w.destroy()
+        return 15
+    if mid == resting or mid == settled:
+        print("eqoi anim: the button snapped instead of animating")
+        w.destroy()
+        return 16
+    if w.animating() != 0:
+        print("eqoi anim: the button never settled")
+        w.destroy()
+        return 17
+
+    w.destroy()
+    print("eqoi anim: ok")
+    return 0

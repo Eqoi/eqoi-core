@@ -9,7 +9,7 @@ On Linux the public API is display-server neutral. The shared `window` adapter
 uses native Wayland/xdg-shell when available and falls back to X11/XWayland;
 Eqoi does not contain display-server-specific rendering or input code.
 
-Current version: **0.13.0**
+Current version: **0.14.0**
 
 ```text
 Eqoi application
@@ -244,6 +244,37 @@ focus falls to the first focusable rather than vanishing.
 Space is deliberately not an activation key yet: it also arrives as a typed
 character, and until text input owns a caret there is no unambiguous way to
 tell a press from a typed space. Delete waits on the same work.
+
+## Animation
+
+Widget states move rather than snap: button and checkbox fills fade, the
+toggle knob slides, the tab underline grows from its centre.
+
+An animated value is keyed by widget identity, so a widget declares what it
+wants to be and the value walks there over time.
+
+```dolet
+t: i32 = app.anim(id, hovered * 100, 700)       # 0..100 at 700 per second
+fill: UIColor = app.mix_colors(base, hot, t)
+```
+
+The first time an identity is seen its value starts **at** the target, so
+nothing fades in from nowhere on the frame it appears. Rates are per second
+and `app.delta_us()` is the frame duration, so speed does not change with
+frame rate.
+
+The clock is the platform layer's, available on every target with no import,
+so animation costs Eqoi no new dependency.
+
+**The part that makes it work.** The frame loop blocks on `Window.wait()`,
+which returns only when the operating system has an event — and an animation
+has none. So the loop asks whether anything is still moving and blocks with a
+timeout while it is, then goes fully idle again once everything settles. That
+keeps the property worth having: an Eqoi application costs nothing while it
+sits on screen.
+
+Offscreen, timing comes from `inject_delta_us` instead of a clock, so
+animation is exactly reproducible in tests.
 
 ## Table
 

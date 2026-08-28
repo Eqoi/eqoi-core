@@ -1,0 +1,211 @@
+# ============================
+#  Eqoi Animation
+# ============================
+# Frame timing and per-widget animated values.
+#
+# The clock is TimeOps.time_now_ns(), which the platform layer provides on
+# every target with no import, so animation costs Eqoi no new dependency.
+#
+# An animated value is keyed by widget identity, so a widget declares what it
+# wants to be and the value walks there over time:
+#
+#     t: i32 = app.anim(id, hovered * 100, 600)      # 0..100 at 600/second
+#     fill: UIColor = app.mix_colors(base, hot, t)
+#
+# The first time an identity is seen its value starts AT the target, so a
+# widget does not fade in from nothing the frame it appears.
+#
+# The part that makes any of this work: Eqoi's frame loop blocks on
+# Window.wait(), which returns only when the operating system has an event.
+# An animation has no events. So the loop asks whether anything is still
+# moving, and blocks with a timeout instead of indefinitely while it is. When
+# nothing is animating the loop goes fully idle again, which is the property
+# that makes an Eqoi application cost nothing while it sits on screen.
+
+EQOI_ANIM_FIXED: i64 = 256
+EQOI_ANIM_INITIAL: i32 = 64
+# Slots untouched for this many frames are reclaimed, so widgets that stop
+# being drawn do not hold their entries forever.
+EQOI_ANIM_STALE: i32 = 240
+
+attach EqoiApp:
+    # ---------------------------------------------------------------
+    # Frame timing
+    # ---------------------------------------------------------------
+    fun begin_timing(self):
+        if self.is_headless == 1:
+            # Deterministic offscreen: the delta is whatever a test injected,
+            # defaulting to one 60Hz frame.
+            self.frame_delta_us = self.in_delta_us
+            self.frame_time_us = self.frame_time_us + self.frame_delta_us
+            return
+        now: i64 = TimeOps.time_now_ns() / 1000
+        if self.frame_time_us == 0:
+            self.frame_delta_us = 0
+        else:
+            self.frame_delta_us = now - self.frame_time_us
+            if self.frame_delta_us < 0:
+                self.frame_delta_us = 0
+            # A frame that took longer than a quarter second was a stall, not
+            # a slow frame. Clamp it so animations do not jump.
+            if self.frame_delta_us > 250000:
+                self.frame_delta_us = 250000
+        self.frame_time_us = now
+
+    fun delta_us(self) -> i64:
+        return self.frame_delta_us
+
+    fun delta_ms(self) -> i32:
+        return (self.frame_delta_us / 1000) as i32
+
+    # True while something is still moving. The frame loop reads this to
+    # decide whether it may block indefinitely.
+    fun animating(self) -> i32:
+        if self.anim_active > 0:
+            return 1
+        return 0
+
+    # ---------------------------------------------------------------
+    # Store
+    # ---------------------------------------------------------------
+    fun _anim_slot_key(self, index: i32) -> i64:
+        return Memory.read_i64(self.anim_keys + (index as i64) * 8)
+
+    fun _anim_grow(self) -> i32:
+        old_capacity: i32 = self.anim_capacity
+        old_keys: i64 = self.anim_keys
+        old_values: i64 = self.anim_values
+        old_touched: i64 = self.anim_touched
+
+        next_capacity: i32 = old_capacity * 2
+        if next_capacity < EQOI_ANIM_INITIAL:
+            next_capacity = EQOI_ANIM_INITIAL
+
+        keys: i64 = Memory.malloc_zeroed((next_capacity as i64) * 8)
+        if keys == 0:
+            return 0
+        values: i64 = Memory.malloc_zeroed((next_capacity as i64) * 4)
+        if values == 0:
+            Memory.free(keys)
+            return 0
+        touched: i64 = Memory.malloc_zeroed((next_capacity as i64) * 4)
+        if touched == 0:
+            Memory.free(keys)
+            Memory.free(values)
+            return 0
+
+        self.anim_keys = keys
+        self.anim_values = values
+        self.anim_touched = touched
+        self.anim_capacity = next_capacity
+        self.anim_count = 0
+
+        # Carry over entries that are still fresh; stale ones are dropped,
+        # which is what keeps the table from growing without bound.
+        if old_keys != 0:
+            i: i32 = 0
+            key: i64 = 0
+            seen: i32 = 0
+            while i < old_capacity:
+                key = Memory.read_i64(old_keys + (i as i64) * 8)
+                seen = Memory.read_i32(old_touched + (i as i64) * 4)
+                if key != 0 and self.frame_counter - seen < EQOI_ANIM_STALE:
+                    slot: i32 = self._anim_find(key)
+                    if slot >= 0:
+                        Memory.write_i64(self.anim_keys + (slot as i64) * 8, key)
+                        Memory.write_i32(self.anim_values + (slot as i64) * 4, Memory.read_i32(old_values + (i as i64) * 4))
+                        Memory.write_i32(self.anim_touched + (slot as i64) * 4, seen)
+                        self.anim_count = self.anim_count + 1
+                i = i + 1
+            Memory.free(old_keys)
+            Memory.free(old_values)
+            Memory.free(old_touched)
+        return 1
+
+    # Index holding `key`, or the first free index for it. -1 if the table is
+    # full, which the caller resolves by growing.
+    fun _anim_find(self, key: i64) -> i32:
+        if self.anim_capacity == 0:
+            return -1
+        mask: i64 = (self.anim_capacity as i64) - 1
+        index: i32 = (key & mask) as i32
+        probes: i32 = 0
+        current: i64 = 0
+        while probes < self.anim_capacity:
+            current = self._anim_slot_key(index)
+            if current == 0 or current == key:
+                return index
+            index = index + 1
+            if index >= self.anim_capacity:
+                index = 0
+            probes = probes + 1
+        return -1
+
+    # ---------------------------------------------------------------
+    # The one call a widget makes.
+    # ---------------------------------------------------------------
+    # Walks the value stored for `id` toward `target` at `rate` units per
+    # second and returns where it is now.
+    fun anim(self, id: i64, target: i32, rate: i32) -> i32:
+        if id == 0:
+            return target
+        # Grow at three quarters full, so probing stays short.
+        if self.anim_capacity == 0 or self.anim_count * 4 >= self.anim_capacity * 3:
+            if self._anim_grow() == 0:
+                return target
+
+        slot: i32 = self._anim_find(id)
+        if slot < 0:
+            if self._anim_grow() == 0:
+                return target
+            slot = self._anim_find(id)
+            if slot < 0:
+                return target
+
+        target_fp: i64 = (target as i64) * EQOI_ANIM_FIXED
+        if self._anim_slot_key(slot) == 0:
+            # First sight: start where the widget already is.
+            Memory.write_i64(self.anim_keys + (slot as i64) * 8, id)
+            Memory.write_i32(self.anim_values + (slot as i64) * 4, target_fp as i32)
+            Memory.write_i32(self.anim_touched + (slot as i64) * 4, self.frame_counter)
+            self.anim_count = self.anim_count + 1
+            return target
+
+        Memory.write_i32(self.anim_touched + (slot as i64) * 4, self.frame_counter)
+        current_fp: i64 = Memory.read_i32(self.anim_values + (slot as i64) * 4) as i64
+        if current_fp == target_fp:
+            return target
+
+        advance: i64 = ((rate as i64) * EQOI_ANIM_FIXED * self.frame_delta_us) / 1000000
+        if advance < 1:
+            advance = 1
+        if current_fp < target_fp:
+            current_fp = current_fp + advance
+            if current_fp > target_fp:
+                current_fp = target_fp
+        else:
+            current_fp = current_fp - advance
+            if current_fp < target_fp:
+                current_fp = target_fp
+
+        Memory.write_i32(self.anim_values + (slot as i64) * 4, current_fp as i32)
+        if current_fp != target_fp:
+            self.anim_active = self.anim_active + 1
+        return (current_fp / EQOI_ANIM_FIXED) as i32
+
+    # Convenience: the 0..100 blend a hover state wants.
+    fun anim_hover(self, id: i64, hovered: i32) -> i32:
+        return self.anim(id, hovered * 100, 700)
+
+    fun _free_anim(self):
+        if self.anim_keys != 0:
+            Memory.free(self.anim_keys)
+        if self.anim_values != 0:
+            Memory.free(self.anim_values)
+        if self.anim_touched != 0:
+            Memory.free(self.anim_touched)
+        self.anim_keys = 0
+        self.anim_values = 0
+        self.anim_touched = 0
+        self.anim_capacity = 0
+        self.anim_count = 0

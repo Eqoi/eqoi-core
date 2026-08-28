@@ -61,9 +61,7 @@ attach EqoiApp:
         focused: i32 = self.register_focusable(id)
         mouse: UIMouseState = self.input_state.mouse
         hovered: i32 = mouse.is_over_xy(x, y, width, height)
-        fill: UIColor = self.theme.accent
-        if hovered == 1:
-            fill = self.theme.accent_hover
+        fill: UIColor = self.mix_colors(self.theme.accent, self.theme.accent_hover, self.anim_hover(id, hovered))
 
         commands: UIDrawList = self.commands
         r: i32 = self.theme.corner_radius
@@ -93,9 +91,7 @@ attach EqoiApp:
         focused: i32 = self.register_focusable(id)
         mouse: UIMouseState = self.input_state.mouse
         hovered: i32 = mouse.is_over_xy(x, y, width, height)
-        fill: UIColor = self.theme.surface
-        if hovered == 1:
-            fill = self.theme.surface_hover
+        fill: UIColor = self.mix_colors(self.theme.surface, self.theme.surface_hover, self.anim_hover(id, hovered))
 
         commands: UIDrawList = self.commands
         r: i32 = self.theme.corner_radius
@@ -143,21 +139,18 @@ attach EqoiApp:
 
         commands: UIDrawList = self.commands
         # Box fill: accent when checked, else surface
-        fill: UIColor = self.theme.surface
-        border: UIColor = self.theme.border
-        if current == 1:
-            fill = self.theme.accent
-            border = self.theme.accent
-            if hovered == 1:
-                fill = self.theme.accent_hover
-                border = self.theme.accent_hover
-        elif hovered == 1:
-            border = self.theme.text
+        checked_t: i32 = self.anim(id, current * 100, 900)
+        hover_t: i32 = self.anim_hover(self.mix_id(id, 7), hovered)
+        on_fill: UIColor = self.mix_colors(self.theme.accent, self.theme.accent_hover, hover_t)
+        fill: UIColor = self.mix_colors(self.theme.surface, on_fill, checked_t)
+        off_border: UIColor = self.mix_colors(self.theme.border, self.theme.text, hover_t)
+        border: UIColor = self.mix_colors(off_border, on_fill, checked_t)
         commands.push_fill_rect(x, y, box, box, fill)
         commands.push_outline_rect(x, y, box, box, border, self.theme.border_width)
 
-        # Checkmark: two lines forming ✓ — only when checked
-        if current == 1:
+        # Checkmark appears once the box is more filled than not, so it lands
+        # with the colour rather than snapping ahead of it.
+        if checked_t > 50:
             commands.push_line(x + 3, y + 8, x + 7, y + 12, self.theme.text, 2)
             commands.push_line(x + 7, y + 12, x + 13, y + 4, self.theme.text, 2)
 
@@ -196,22 +189,20 @@ attach EqoiApp:
 
         current: i32 = Memory.read_i32(value_ptr)
 
-        track_color: UIColor = self.theme.surface
-        if current == 1:
-            track_color = self.theme.accent
-            if hovered == 1:
-                track_color = self.theme.accent_hover
-        elif hovered == 1:
-            track_color = self.theme.surface_hover
+        slide: i32 = self.anim(id, current * 100, 1000)
+        toggle_hover: i32 = self.anim_hover(self.mix_id(id, 7), hovered)
+        off_track: UIColor = self.mix_colors(self.theme.surface, self.theme.surface_hover, toggle_hover)
+        on_track: UIColor = self.mix_colors(self.theme.accent, self.theme.accent_hover, toggle_hover)
+        track_color: UIColor = self.mix_colors(off_track, on_track, slide)
 
         commands: UIDrawList = self.commands
         commands.push_fill_rounded_rect(x, y, w, h, h / 2, track_color)
         # Knob: white circle that slides between left and right ends
         knob_r: i32 = (h / 2) - 3
         cy: i32 = y + h / 2
-        cx: i32 = x + h / 2
-        if current == 1:
-            cx = x + w - h / 2
+        left_cx: i32 = x + h / 2
+        right_cx: i32 = x + w - h / 2
+        cx: i32 = left_cx + ((right_cx - left_cx) * slide) / 100
         commands.push_fill_circle(cx, cy, knob_r, self.theme.text)
         # Label to the right
         commands.push_text(x + w + 8, y + (h - self.text_height()) / 2, label, self.theme.text)
@@ -307,9 +298,10 @@ attach EqoiApp:
         # Knob — single solid circle, no extra outline ring
         knob_x: i32 = x + fill_w
         knob_r: i32 = h / 2 - 2
-        knob_color: UIColor = self.theme.accent
+        engaged: i32 = 0
         if hovered == 1 or self.drag_id == id:
-            knob_color = self.theme.accent_hover
+            engaged = 1
+        knob_color: UIColor = self.mix_colors(self.theme.accent, self.theme.accent_hover, self.anim_hover(id, engaged))
         commands.push_fill_circle(knob_x, y + h / 2, knob_r, knob_color)
         self.push_commands(commands)
         if focused == 1:
@@ -618,8 +610,12 @@ attach EqoiApp:
             text_color = self.theme.text
         label_w: i32 = self.text_width(label)
         commands.push_text(self.tab_cursor_x + (item_width - label_w) / 2, self.tab_y + (self.tab_h - self.text_height()) / 2, label, text_color)
-        if is_active == 1:
-            commands.push_fill_rect(self.tab_cursor_x, self.tab_y + self.tab_h - 3, item_width, 3, self.theme.accent)
+        # The underline grows from the centre, so switching tabs reads as one
+        # indicator moving rather than two blinking.
+        under_t: i32 = self.anim(self.mix_id(id, 3), is_active * 100, 800)
+        if under_t > 0:
+            under_w: i32 = (item_width * under_t) / 100
+            commands.push_fill_rect(self.tab_cursor_x + (item_width - under_w) / 2, self.tab_y + self.tab_h - 3, under_w, 3, self.theme.accent)
         self.push_commands(commands)
         if focused == 1:
             self.focus_ring(self.tab_cursor_x, self.tab_y, item_width, self.tab_h)

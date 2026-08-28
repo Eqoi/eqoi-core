@@ -97,6 +97,11 @@ attach EqoiApp:
     fun inject_middle_up(self):
         self.in_middle = 0
 
+    # Frame duration for the next offscreen frame. Animation is driven by
+    # this rather than a clock, so a test advances time exactly.
+    fun inject_delta_us(self, microseconds: i64):
+        self.in_delta_us = microseconds
+
     # Positive scrolls up, matching the native wheel delta.
     fun inject_wheel(self, delta: f32):
         self.in_wheel = delta

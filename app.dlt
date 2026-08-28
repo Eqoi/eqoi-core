@@ -60,6 +60,17 @@ struct EqoiApp:
     text_anchor: i32 = 0
     text_dragging: i32 = 0
 
+    # ---- Frame timing and animation (see anim.dlt) ----
+    frame_time_us: i64 = 0
+    frame_delta_us: i64 = 0
+    in_delta_us: i64 = 16666
+    anim_keys: i64 = 0
+    anim_values: i64 = 0
+    anim_touched: i64 = 0
+    anim_capacity: i32 = 0
+    anim_count: i32 = 0
+    anim_active: i32 = 0
+
     # ---- Managed state (alloc_bool/int/buf) ----
     state_ptrs: i64 = 0
     state_count: i32 = 0
@@ -237,6 +248,7 @@ attach EqoiApp:
         self._free_state()
         self._free_id_stack()
         self._free_table()
+        self._free_anim()
         if self.commands.is_valid() == 1:
             self.commands.destroy()
         if self.surface.is_valid() == 1:
@@ -272,7 +284,13 @@ attach EqoiApp:
             return 0
         if self.is_headless == 1:
             return self.begin_offscreen()
-        Window.wait()
+        # Window.wait() returns only on an OS event, and an animation has
+        # none. While something is still moving, block with a timeout so the
+        # next frame arrives; when nothing is, go fully idle again.
+        if self.anim_active > 0:
+            Window.wait_timeout(16)
+        else:
+            Window.wait()
         self.sync_window()
         if self.window_should_close == 1:
             return 0
@@ -379,6 +397,8 @@ attach EqoiApp:
         self.commands.push_clear(self.width, self.height, self.theme.background)
         self.frame_counter = self.frame_counter + 1
         self.hover_seen = 0
+        self.anim_active = 0
+        self.begin_timing()
         self.begin_focus_frame()
         # Stale drag cleanup — if a drag ended and no drop_target claimed
         # the payload, reset so a new drag can start cleanly.
