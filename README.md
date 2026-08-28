@@ -9,7 +9,7 @@ On Linux the public API is display-server neutral. The shared `window` adapter
 uses native Wayland/xdg-shell when available and falls back to X11/XWayland;
 Eqoi does not contain display-server-specific rendering or input code.
 
-Current version: **0.7.0**
+Current version: **0.8.0**
 
 ```text
 Eqoi application
@@ -95,6 +95,41 @@ application is not limited to a fixed widget count.
 `EqoiTheme` centralizes application colors, spacing, padding, borders, and
 corner radii. `EqoiTheme.dark()` is the built-in default and
 `EqoiTheme.light()` provides the matching light palette.
+
+## Testing without a window
+
+`EqoiApp.headless(width, height)` is the offscreen twin of `EqoiApp.create`. It
+owns the same surface and command list and runs the same frame loop, but opens
+no window, pumps no events, and presents nothing. Input arrives from the
+`inject_*` helpers instead of the operating system, so widget behaviour can be
+driven and asserted on with no display server.
+
+```dolet
+app: EqoiApp = EqoiApp.headless(400, 300)
+
+app.inject_mouse_move(60, 60)
+app.begin_offscreen()
+app.button(40, 40, 120, 40, "OK")     # hovered, not pressed -> 0
+app.end()
+
+app.inject_left_down()
+app.begin_offscreen()
+clicked: i32 = app.button(40, 40, 120, 40, "OK")   # press edge -> 1
+app.end()
+
+app.destroy()
+```
+
+Injected state follows the native path exactly. Buttons and modifiers are
+**held** until cleared, which is what makes press and release edges behave the
+way they do under a real mouse. Wheel, typed text, backspace, and the
+navigation keys are **one-shot** and drain after the frame that reads them,
+mirroring the native `window_consume_*` calls. A click is therefore two frames,
+not one, because that is what it is in an immediate-mode loop.
+
+`pixel_at(x, y)` reads back a rendered pixel once `end()` has flushed the frame,
+and `resize_offscreen(width, height)` moves the canvas so responsive layout can
+be exercised without a window manager. `tests/widgets.dlt` uses all of it.
 
 ## Boundaries
 

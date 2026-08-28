@@ -1,0 +1,226 @@
+import eqoi
+
+# Widget behaviour driven entirely offscreen: no window, no display server,
+# no event pump. Every check below runs the real frame loop and the real
+# widget code, so these are interaction tests rather than geometry tests.
+
+BUTTON_X: i32 = 40
+BUTTON_Y: i32 = 40
+BUTTON_W: i32 = 120
+BUTTON_H: i32 = 40
+
+fun main() -> i32:
+    app: EqoiApp = EqoiApp.headless(400, 300)
+    if app.is_valid() == 0:
+        print("eqoi widgets: headless app creation failed")
+        return 1
+    if app.is_headless != 1 or app.width != 400 or app.height != 300:
+        print("eqoi widgets: headless app reports the wrong surface")
+        app.destroy()
+        return 2
+
+    # ---------------------------------------------------------------
+    # A button fires on the press edge, once, and only while hovered.
+    # ---------------------------------------------------------------
+    clicks: i32 = 0
+
+    # Pointer over the button, nothing held: no edge, no click.
+    app.inject_mouse_move(60, 60)
+    if app.begin_offscreen() == 1:
+        clicks = clicks + app.button(BUTTON_X, BUTTON_Y, BUTTON_W, BUTTON_H, "OK")
+        app.end()
+    if clicks != 0:
+        print("eqoi widgets: button fired without a press edge")
+        app.destroy()
+        return 3
+
+    # Press: exactly one click.
+    app.inject_left_down()
+    if app.begin_offscreen() == 1:
+        clicks = clicks + app.button(BUTTON_X, BUTTON_Y, BUTTON_W, BUTTON_H, "OK")
+        app.end()
+    if clicks != 1:
+        print("eqoi widgets: button did not fire on the press edge")
+        app.destroy()
+        return 4
+
+    # Still held: an immediate-mode button must not repeat.
+    if app.begin_offscreen() == 1:
+        clicks = clicks + app.button(BUTTON_X, BUTTON_Y, BUTTON_W, BUTTON_H, "OK")
+        app.end()
+    if clicks != 1:
+        print("eqoi widgets: button repeated while the mouse stayed down")
+        app.destroy()
+        return 5
+
+    # Release, then press again away from the button: no click.
+    app.inject_left_up()
+    if app.begin_offscreen() == 1:
+        app.button(BUTTON_X, BUTTON_Y, BUTTON_W, BUTTON_H, "OK")
+        app.end()
+    app.inject_mouse_move(5, 5)
+    app.inject_left_down()
+    if app.begin_offscreen() == 1:
+        clicks = clicks + app.button(BUTTON_X, BUTTON_Y, BUTTON_W, BUTTON_H, "OK")
+        app.end()
+    if clicks != 1:
+        print("eqoi widgets: button fired while the pointer was outside it")
+        app.destroy()
+        return 6
+    app.inject_left_up()
+    if app.begin_offscreen() == 1:
+        app.end()
+
+    # ---------------------------------------------------------------
+    # A checkbox flips once per press and holds its value between frames.
+    # ---------------------------------------------------------------
+    checked: i64 = app.alloc_bool(0)
+    if checked == 0:
+        print("eqoi widgets: alloc_bool failed")
+        app.destroy()
+        return 7
+
+    app.inject_mouse_move(28, 108)
+    app.inject_left_down()
+    if app.begin_offscreen() == 1:
+        app.checkbox(20, 100, "Enable", checked)
+        app.end()
+    if app.get_bool(checked) != 1:
+        print("eqoi widgets: checkbox did not flip on press")
+        app.destroy()
+        return 8
+
+    # Held down: no second flip.
+    if app.begin_offscreen() == 1:
+        app.checkbox(20, 100, "Enable", checked)
+        app.end()
+    if app.get_bool(checked) != 1:
+        print("eqoi widgets: checkbox flipped twice while held")
+        app.destroy()
+        return 9
+
+    # Release and press again: flips back.
+    app.inject_left_up()
+    if app.begin_offscreen() == 1:
+        app.checkbox(20, 100, "Enable", checked)
+        app.end()
+    app.inject_left_down()
+    if app.begin_offscreen() == 1:
+        app.checkbox(20, 100, "Enable", checked)
+        app.end()
+    if app.get_bool(checked) != 0:
+        print("eqoi widgets: checkbox did not flip back on the next press")
+        app.destroy()
+        return 10
+    # The release needs its own frame, or the next press is not a new edge.
+    app.inject_left_up()
+    if app.begin_offscreen() == 1:
+        app.checkbox(20, 100, "Enable", checked)
+        app.end()
+
+    # ---------------------------------------------------------------
+    # A text input takes focus on click, appends typed text, and honours
+    # backspace. Typed text is one-shot: it must not repeat next frame.
+    # ---------------------------------------------------------------
+    buf: i64 = app.alloc_buf(32)
+    if buf == 0:
+        print("eqoi widgets: alloc_buf failed")
+        app.destroy()
+        return 11
+
+    app.inject_mouse_move(120, 180)
+    app.inject_left_down()
+    if app.begin_offscreen() == 1:
+        app.text_input(60, 170, 200, 28, buf, 31)
+        app.end()
+    app.inject_left_up()
+
+    app.inject_text("Hi")
+    if app.begin_offscreen() == 1:
+        app.text_input(60, 170, 200, 28, buf, 31)
+        app.end()
+    if Memory.strlen(buf as str) != 2:
+        print("eqoi widgets: focused text input did not take typed characters")
+        app.destroy()
+        return 12
+
+    # Nothing injected this frame — the previous text must not arrive twice.
+    if app.begin_offscreen() == 1:
+        app.text_input(60, 170, 200, 28, buf, 31)
+        app.end()
+    if Memory.strlen(buf as str) != 2:
+        print("eqoi widgets: typed characters repeated after their frame")
+        app.destroy()
+        return 13
+
+    app.inject_backspace()
+    if app.begin_offscreen() == 1:
+        app.text_input(60, 170, 200, 28, buf, 31)
+        app.end()
+    if Memory.strlen(buf as str) != 1:
+        print("eqoi widgets: backspace did not delete a character")
+        app.destroy()
+        return 14
+
+    # ---------------------------------------------------------------
+    # A frame really rasterizes: the button fill lands in the surface.
+    # ---------------------------------------------------------------
+    app.inject_mouse_move(5, 5)
+    if app.begin_offscreen() == 1:
+        app.button(BUTTON_X, BUTTON_Y, BUTTON_W, BUTTON_H, "OK")
+        app.end()
+    centre: UIColor = app.pixel_at(BUTTON_X + BUTTON_W / 2, BUTTON_Y + BUTTON_H / 2)
+    corner: UIColor = app.pixel_at(2, 2)
+    if centre == corner:
+        print("eqoi widgets: button fill is indistinguishable from the background")
+        app.destroy()
+        return 15
+    if corner != app.theme.background:
+        print("eqoi widgets: frame did not clear to the theme background")
+        app.destroy()
+        return 16
+
+    # ---------------------------------------------------------------
+    # Resizing offscreen moves the canvas, so responsive layout is testable.
+    # ---------------------------------------------------------------
+    if app.resize_offscreen(640, 480) == 0:
+        print("eqoi widgets: offscreen resize failed")
+        app.destroy()
+        return 17
+    if app.width != 640 or app.canvas_h != 480:
+        print("eqoi widgets: offscreen resize did not update the canvas")
+        app.destroy()
+        return 18
+    if app.begin_offscreen() == 1:
+        layout: EqoiLayout = EqoiLayout.column(0, 0, app.width, app.height, 16, 8)
+        row: UIRect = layout.next(0, 32)
+        app.end()
+        if row.right != 624:
+            print("eqoi widgets: layout did not follow the resized canvas")
+            app.destroy()
+            return 19
+
+    # ---------------------------------------------------------------
+    # running() ends when the app is asked to close.
+    # ---------------------------------------------------------------
+    if app.running() != 1:
+        print("eqoi widgets: headless app stopped running unprompted")
+        app.destroy()
+        return 20
+    app.request_close()
+    if app.running() != 0:
+        print("eqoi widgets: request_close did not end the loop")
+        app.destroy()
+        return 21
+    if app.begin_offscreen() != 0:
+        print("eqoi widgets: a frame began after the app was closed")
+        app.destroy()
+        return 22
+
+    app.destroy()
+    if app.is_valid() != 0:
+        print("eqoi widgets: destroy left the app valid")
+        return 23
+
+    print("eqoi widgets: ok")
+    return 0

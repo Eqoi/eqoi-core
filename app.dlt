@@ -76,6 +76,27 @@ struct EqoiApp:
     canvas_w: i32 = 0
     canvas_h: i32 = 0
 
+    # ---- Headless mode ----
+    # A headless app owns a surface and runs the full frame loop with no
+    # window. Input arrives from the inject_* helpers instead of the OS, so
+    # widgets can be driven and asserted on without a display server.
+    is_headless: i32 = 0
+    in_mouse_x: i32 = 0
+    in_mouse_y: i32 = 0
+    in_left: i32 = 0
+    in_right: i32 = 0
+    in_middle: i32 = 0
+    in_wheel: f32 = 0.0
+    in_chars: str = ""
+    in_backspace: i32 = 0
+    in_delete: i32 = 0
+    in_enter: i32 = 0
+    in_tab: i32 = 0
+    in_escape: i32 = 0
+    in_shift: i32 = 0
+    in_ctrl: i32 = 0
+    in_alt: i32 = 0
+
 attach EqoiApp:
     static fun create(title: str, width: i32, height: i32) -> EqoiApp:
         app: EqoiApp = EqoiApp()
@@ -101,6 +122,38 @@ attach EqoiApp:
         app.window_resized = 0
         app.window_focused = 1
         app.window_surface = 0
+        app.width = width
+        app.height = height
+        app.canvas_w = width
+        app.canvas_h = height
+        app.valid = 1
+        app.commands = commands
+        app.surface = surface
+        app.input_state = ui_input_create()
+        return app
+
+    # Offscreen twin of create(). Same surface, same command list, same frame
+    # loop — no window, no event pump, no presentation.
+    static fun headless(width: i32, height: i32) -> EqoiApp:
+        app: EqoiApp = EqoiApp()
+        app.use_dark_theme()
+
+        if width <= 0 or height <= 0:
+            return app
+
+        commands: UIDrawList = ui_draw_list_create(1024)
+        if commands.is_valid() == 0:
+            return app
+
+        surface: UISurface = ui_surface_create(width, height)
+        if surface.is_valid() == 0:
+            commands.destroy()
+            return app
+
+        app.is_headless = 1
+        app.window_handle = 0
+        app.window_should_close = 0
+        app.window_focused = 1
         app.width = width
         app.height = height
         app.canvas_w = width
@@ -143,6 +196,8 @@ attach EqoiApp:
     fun should_close(self) -> i32:
         if self.valid == 0:
             return 1
+        if self.is_headless == 1:
+            return self.window_should_close
         result: i32 = Window.should_close()
         self.window_should_close = result
         return result
@@ -155,6 +210,8 @@ attach EqoiApp:
     fun begin(self) -> i32:
         if self.valid == 0:
             return 0
+        if self.is_headless == 1:
+            return self.begin_offscreen()
         Window.wait()
         self.sync_window()
         if self.window_should_close == 1:
@@ -166,6 +223,8 @@ attach EqoiApp:
     fun begin_poll(self) -> i32:
         if self.valid == 0:
             return 0
+        if self.is_headless == 1:
+            return self.begin_offscreen()
         Window.poll()
         self.sync_window()
         if self.window_should_close == 1:
@@ -177,6 +236,8 @@ attach EqoiApp:
     fun begin_timeout(self, timeout_ms: i32) -> i32:
         if self.valid == 0:
             return 0
+        if self.is_headless == 1:
+            return self.begin_offscreen()
         Window.wait_timeout(timeout_ms)
         self.sync_window()
         if self.window_should_close == 1:
@@ -194,7 +255,8 @@ attach EqoiApp:
         canvas: DrawCanvas = self.surface.canvas()
         if canvas.is_valid() == 1:
             self.commands.render(canvas)
-            window_present_framebuffer(self.window_handle, self.surface.pixels, self.surface.width, self.surface.height, self.surface.pitch)
+            if self.is_headless == 0:
+                window_present_framebuffer(self.window_handle, self.surface.pixels, self.surface.width, self.surface.height, self.surface.pitch)
 
     fun sync_window(self):
         old_width: i32 = self.width

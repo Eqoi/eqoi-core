@@ -14,6 +14,7 @@ load eqoi/theme
 load eqoi/layout
 load eqoi/app
 load eqoi/widgets
+load eqoi/headless
 
 export EqoiTheme
 export EqoiLayout
@@ -23,3 +24,4 @@ export EQOI_LAYOUT_ROW
 export eqoi_theme_dark
 export eqoi_theme_light
 export eqoi_app_create
+export eqoi_app_headless

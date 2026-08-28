@@ -1,0 +1,160 @@
+# ============================
+#  Eqoi Headless Mode
+# ============================
+# The offscreen half of the frame loop. A headless app renders into its own
+# surface and takes input from these inject_* helpers instead of the OS, so
+# widgets can be driven and asserted on with no window and no display server.
+#
+# The contract matches the native path exactly:
+#   - Button and modifier state is HELD. It stays set until cleared, which is
+#     what makes press/release edges (left_pressed, left_released) behave the
+#     way they do under a real mouse.
+#   - Wheel, typed text, backspace, and the navigation keys are ONE-SHOT. They
+#     drain after the frame that reads them, mirroring the native
+#     window_consume_* calls.
+#
+# A click is therefore two frames, not one — down, then up — because that is
+# what it is in an immediate-mode loop.
+
+attach EqoiApp:
+    # Headless twin of begin(). No wait, no event pump, no window sync: the
+    # surface size only changes when a test calls resize_offscreen().
+    fun begin_offscreen(self) -> i32:
+        if self.valid == 0:
+            return 0
+        if self.window_should_close == 1:
+            return 0
+        self.window_resized = 0
+        self.apply_injected_input()
+        self.begin_frame()
+        return 1
+
+    fun apply_injected_input(self):
+        self.input_state.begin_frame(
+            self.in_mouse_x,
+            self.in_mouse_y,
+            self.in_left,
+            self.in_right,
+            self.in_middle,
+            0.0,
+            self.in_wheel,
+            self.in_chars,
+            self.in_backspace
+        )
+        self.input_state.set_navigation(
+            self.in_delete,
+            self.in_enter,
+            self.in_tab,
+            self.in_escape,
+            self.in_shift,
+            self.in_ctrl,
+            self.in_alt
+        )
+        # Drain the one-shot events. Held state (buttons, modifiers) survives.
+        self.in_wheel = 0.0
+        self.in_chars = ""
+        self.in_backspace = 0
+        self.in_delete = 0
+        self.in_enter = 0
+        self.in_tab = 0
+        self.in_escape = 0
+
+    # ---------------------------------------------------------------
+    # Pointer
+    # ---------------------------------------------------------------
+    fun inject_mouse_move(self, x: i32, y: i32):
+        self.in_mouse_x = x
+        self.in_mouse_y = y
+
+    fun inject_left_down(self):
+        self.in_left = 1
+
+    fun inject_left_up(self):
+        self.in_left = 0
+
+    fun inject_right_down(self):
+        self.in_right = 1
+
+    fun inject_right_up(self):
+        self.in_right = 0
+
+    fun inject_middle_down(self):
+        self.in_middle = 1
+
+    fun inject_middle_up(self):
+        self.in_middle = 0
+
+    # Positive scrolls up, matching the native wheel delta.
+    fun inject_wheel(self, delta: f32):
+        self.in_wheel = delta
+
+    # ---------------------------------------------------------------
+    # Keyboard
+    # ---------------------------------------------------------------
+    fun inject_text(self, value: str):
+        self.in_chars = value
+
+    fun inject_backspace(self):
+        self.in_backspace = 1
+
+    fun inject_delete(self):
+        self.in_delete = 1
+
+    fun inject_enter(self):
+        self.in_enter = 1
+
+    fun inject_tab(self):
+        self.in_tab = 1
+
+    fun inject_escape(self):
+        self.in_escape = 1
+
+    fun inject_modifiers(self, shift: i32, ctrl: i32, alt: i32):
+        self.in_shift = shift
+        self.in_ctrl = ctrl
+        self.in_alt = alt
+
+    # Drop every held button and modifier. One-shot events are already
+    # drained by the frame that read them.
+    fun inject_release_all(self):
+        self.in_left = 0
+        self.in_right = 0
+        self.in_middle = 0
+        self.in_shift = 0
+        self.in_ctrl = 0
+        self.in_alt = 0
+
+    # ---------------------------------------------------------------
+    # Lifecycle and inspection
+    # ---------------------------------------------------------------
+    # Ends the next running() check. The native path gets this from the OS.
+    fun request_close(self):
+        self.window_should_close = 1
+
+    # Resize the offscreen surface and raise window_resized for one frame,
+    # so responsive layout can be tested without a window manager.
+    fun resize_offscreen(self, width: i32, height: i32) -> i32:
+        if self.is_headless == 0:
+            return 0
+        if width <= 0 or height <= 0:
+            return 0
+        if self.surface.resize(width, height) == 0:
+            return 0
+        self.width = width
+        self.height = height
+        self.canvas_w = width
+        self.canvas_h = height
+        self.window_resized = 1
+        return 1
+
+    # Read back a rendered pixel. Valid after end() has flushed the frame.
+    fun pixel_at(self, x: i32, y: i32) -> UIColor:
+        if self.surface.is_valid() == 0:
+            return 0
+        if x < 0 or y < 0 or x >= self.surface.width or y >= self.surface.height:
+            return 0
+        offset: i64 = (y as i64) * (self.surface.pitch as i64) + (x as i64) * 4
+        return Memory.read_i32(self.surface.pixels + offset)
+
+fun eqoi_app_headless(width: i32, height: i32) -> EqoiApp:
+    return EqoiApp.headless(width, height)
