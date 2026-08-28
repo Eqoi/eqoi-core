@@ -52,6 +52,14 @@ struct EqoiApp:
     # ---- Drag and drop ----
     drag_payload: i64 = 0
 
+    # ---- Text editing (see textedit.dlt) ----
+    # Only the focused input needs a caret, so one set of state serves them
+    # all; text_owner records which identity it belongs to.
+    text_owner: i64 = 0
+    text_caret: i32 = 0
+    text_anchor: i32 = 0
+    text_dragging: i32 = 0
+
     # ---- Managed state (alloc_bool/int/buf) ----
     state_ptrs: i64 = 0
     state_count: i32 = 0
@@ -123,6 +131,8 @@ struct EqoiApp:
     in_arrow_right: i32 = 0
     in_arrow_up: i32 = 0
     in_arrow_down: i32 = 0
+    in_home: i32 = 0
+    in_end: i32 = 0
 
 attach EqoiApp:
     static fun create(title: str, width: i32, height: i32) -> EqoiApp:
@@ -336,6 +346,10 @@ attach EqoiApp:
             key_just_pressed(KEY_RIGHT),
             key_just_pressed(KEY_UP),
             key_just_pressed(KEY_DOWN)
+        )
+        self.input_state.set_edit_keys(
+            key_just_pressed(KEY_HOME),
+            key_just_pressed(KEY_END)
         )
 
     fun begin_frame(self):

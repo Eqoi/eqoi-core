@@ -1,0 +1,224 @@
+import eqoi
+
+# Text editing: a caret that moves, a selection that spans, and edits that
+# land where the caret is rather than always at the end.
+
+FIELD_X: i32 = 60
+FIELD_Y: i32 = 100
+FIELD_W: i32 = 200
+FIELD_H: i32 = 28
+
+fun buf_is(buf: i64, expected: str) -> i32:
+    n: i64 = Memory.strlen(expected)
+    if Memory.strlen(buf as str) != n:
+        return 0
+    i: i64 = 0
+    while i < n:
+        if Memory.read_i8(buf + i) != Memory.read_i8((expected as i64) + i):
+            return 0
+        i = i + 1
+    return 1
+
+fun frame(app: EqoiApp, buf: i64) -> i32:
+    if app.begin_offscreen() == 1:
+        changed: i32 = app.text_input(FIELD_X, FIELD_Y, FIELD_W, FIELD_H, buf, 31)
+        app.end()
+        return changed
+    return 0
+
+fun main() -> i32:
+    app: EqoiApp = EqoiApp.headless(400, 300)
+    if app.is_valid() == 0:
+        print("eqoi textedit: headless app creation failed")
+        return 1
+    buf: i64 = app.alloc_buf(40)
+    if buf == 0:
+        print("eqoi textedit: alloc_buf failed")
+        app.destroy()
+        return 2
+
+    # Focus by clicking inside the field.
+    app.inject_mouse_move(FIELD_X + 10, FIELD_Y + 14)
+    app.inject_left_down()
+    frame(app, buf)
+    app.inject_left_up()
+    frame(app, buf)
+
+    # ---------------------------------------------------------------
+    # Typing lands at the caret, which starts at the end.
+    # ---------------------------------------------------------------
+    app.inject_text("Hello")
+    frame(app, buf)
+    if buf_is(buf, "Hello") == 0:
+        print("eqoi textedit: typing did not fill the buffer")
+        app.destroy()
+        return 3
+    if app.text_caret != 5:
+        print("eqoi textedit: the caret did not follow the typed text")
+        app.destroy()
+        return 4
+
+    # ---------------------------------------------------------------
+    # Arrows move the caret, and typing inserts there, not at the end.
+    # ---------------------------------------------------------------
+    app.inject_arrow_left()
+    frame(app, buf)
+    app.inject_arrow_left()
+    frame(app, buf)
+    if app.text_caret != 3:
+        print("eqoi textedit: the left arrow did not move the caret")
+        app.destroy()
+        return 5
+
+    app.inject_text("XY")
+    frame(app, buf)
+    if buf_is(buf, "HelXYlo") == 0:
+        print("eqoi textedit: text was appended instead of inserted at the caret")
+        app.destroy()
+        return 6
+    if app.text_caret != 5:
+        print("eqoi textedit: the caret did not advance past the insertion")
+        app.destroy()
+        return 7
+
+    # ---------------------------------------------------------------
+    # Backspace removes before the caret; Delete removes after it.
+    # ---------------------------------------------------------------
+    app.inject_backspace()
+    frame(app, buf)
+    if buf_is(buf, "HelXlo") == 0:
+        print("eqoi textedit: backspace did not delete before the caret")
+        app.destroy()
+        return 8
+
+    app.inject_delete()
+    frame(app, buf)
+    if buf_is(buf, "HelXo") == 0:
+        print("eqoi textedit: Delete did not remove the character after the caret")
+        app.destroy()
+        return 9
+
+    # ---------------------------------------------------------------
+    # Home and End.
+    # ---------------------------------------------------------------
+    app.inject_home()
+    frame(app, buf)
+    if app.text_caret != 0:
+        print("eqoi textedit: Home did not move to the start")
+        app.destroy()
+        return 10
+    app.inject_end()
+    frame(app, buf)
+    if app.text_caret != 5:
+        print("eqoi textedit: End did not move to the end")
+        app.destroy()
+        return 11
+
+    # ---------------------------------------------------------------
+    # Shift extends a selection; typing replaces it.
+    # ---------------------------------------------------------------
+    app.inject_modifiers(1, 0, 0)
+    app.inject_arrow_left()
+    frame(app, buf)
+    app.inject_arrow_left()
+    frame(app, buf)
+    app.inject_modifiers(0, 0, 0)
+    if app.text_has_selection() != 1:
+        print("eqoi textedit: Shift+arrow did not start a selection")
+        app.destroy()
+        return 12
+    if app.text_sel_start() != 3 or app.text_sel_end() != 5:
+        print("eqoi textedit: the selection spans the wrong range")
+        app.destroy()
+        return 13
+
+    app.inject_text("p")
+    frame(app, buf)
+    if buf_is(buf, "Help") == 0:
+        print("eqoi textedit: typing did not replace the selection")
+        app.destroy()
+        return 14
+    if app.text_has_selection() != 0:
+        print("eqoi textedit: the selection survived being replaced")
+        app.destroy()
+        return 15
+
+    # Backspace over a selection removes the whole span, not one character.
+    app.inject_modifiers(1, 0, 0)
+    app.inject_home()
+    frame(app, buf)
+    app.inject_modifiers(0, 0, 0)
+    if app.text_sel_start() != 0 or app.text_sel_end() != 4:
+        print("eqoi textedit: Shift+Home did not select back to the start")
+        app.destroy()
+        return 16
+    app.inject_backspace()
+    frame(app, buf)
+    if Memory.strlen(buf as str) != 0:
+        print("eqoi textedit: backspace did not delete the whole selection")
+        app.destroy()
+        return 17
+
+    # ---------------------------------------------------------------
+    # The pointer places the caret and drags out a selection.
+    # ---------------------------------------------------------------
+    app.inject_text("abcdefgh")
+    frame(app, buf)
+    if buf_is(buf, "abcdefgh") == 0:
+        print("eqoi textedit: could not refill the buffer")
+        app.destroy()
+        return 18
+
+    # Click near the start of the text.
+    text_x: i32 = FIELD_X + 8
+    app.inject_mouse_move(text_x + 1, FIELD_Y + 14)
+    app.inject_left_down()
+    frame(app, buf)
+    if app.text_caret != 0:
+        print("eqoi textedit: a click at the start did not put the caret there")
+        app.destroy()
+        return 19
+
+    # Drag right, still held: the selection grows from the click point.
+    width_of_four: i32 = app.text_prefix_width(buf, 4)
+    app.inject_mouse_move(text_x + width_of_four, FIELD_Y + 14)
+    frame(app, buf)
+    if app.text_caret != 4:
+        print("eqoi textedit: dragging did not move the caret with the pointer")
+        app.destroy()
+        return 20
+    if app.text_sel_start() != 0 or app.text_sel_end() != 4:
+        print("eqoi textedit: dragging did not extend the selection")
+        app.destroy()
+        return 21
+    app.inject_left_up()
+    frame(app, buf)
+
+    # ---------------------------------------------------------------
+    # The buffer is never overrun.
+    # ---------------------------------------------------------------
+    app.inject_end()
+    frame(app, buf)
+    app.inject_text("0123456789012345678901234567890123456789")
+    frame(app, buf)
+    if Memory.strlen(buf as str) != 31:
+        print("eqoi textedit: typing past the maximum was not truncated")
+        app.destroy()
+        return 22
+
+    # ---------------------------------------------------------------
+    # Losing focus releases the caret so the next field starts clean.
+    # ---------------------------------------------------------------
+    app.inject_mouse_move(350, 280)
+    app.inject_left_down()
+    frame(app, buf)
+    app.inject_left_up()
+    frame(app, buf)
+    if app.text_owner != 0:
+        print("eqoi textedit: the caret stayed with an unfocused field")
+        app.destroy()
+        return 23
+
+    app.destroy()
+    print("eqoi textedit: ok")
+    return 0

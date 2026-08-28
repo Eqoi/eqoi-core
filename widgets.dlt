@@ -381,38 +381,30 @@ attach EqoiApp:
         if self.focus_id == id:
             focused = 1
 
-        # Determine current buffer length (scan until NUL or max_len)
-        current_len: i32 = 0
-        while current_len < max_len:
-            b: i8 = Memory.read_i8(buf + (current_len as i64))
-            if b == 0:
-                break
-            current_len = current_len + 1
-
+        text_x: i32 = x + 8
+        length: i32 = self.text_length(buf, max_len)
         changed: i32 = 0
 
         if focused == 1:
-            # Apply backspace first (deletes trailing char)
-            if self.input_state.backspace == 1:
-                if current_len > 0:
-                    current_len = current_len - 1
-                    Memory.write_i8(buf + (current_len as i64), 0)
-                    changed = 1
+            self.text_claim(id, length)
 
-            # Append typed chars (already ASCII-filtered by input/chars.dlt)
-            typed: str = self.input_state.typed_chars
-            tlen: i32 = Memory.strlen(typed) as i32
-            ti: i32 = 0
-            tc: i8 = 0 as i8
-            while ti < tlen:
-                if current_len >= max_len:
-                    break
-                tc = Memory.read_i8((typed as i64) + (ti as i64))
-                Memory.write_i8(buf + (current_len as i64), tc)
-                current_len = current_len + 1
-                ti = ti + 1
-                changed = 1
-            Memory.write_i8(buf + (current_len as i64), 0)
+            # The pointer places the caret and drags out a selection.
+            if hovered == 1 and mouse.left_pressed() == 1:
+                self.text_caret = self.text_index_at(buf, length, text_x, mouse.x)
+                self.text_anchor = self.text_caret
+                self.text_dragging = 1
+            if self.text_dragging == 1:
+                if mouse.left_down == 1:
+                    self.text_caret = self.text_index_at(buf, length, text_x, mouse.x)
+                else:
+                    self.text_dragging = 0
+
+            changed = self.text_apply_keys(buf, max_len)
+            length = self.text_length(buf, max_len)
+        elif self.text_owner == id:
+            # Focus moved on; release the caret so the next input starts clean.
+            self.text_owner = 0
+            self.text_dragging = 0
 
         # --- Render ---
         commands: UIDrawList = self.commands
@@ -426,13 +418,21 @@ attach EqoiApp:
             r = height / 2
         commands.push_fill_rounded_rect(x, y, width, height, r, self.theme.surface)
         commands.push_outline_rounded_rect(x, y, width, height, r, border_color, self.theme.border_width)
-        # Text content
+
+        # Selection sits behind the text, so it is pushed first.
+        if focused == 1 and self.text_has_selection() == 1:
+            sel_left: i32 = self.text_prefix_width(buf, self.text_sel_start())
+            sel_right: i32 = self.text_prefix_width(buf, self.text_sel_end())
+            commands.push_fill_rect(text_x + sel_left, y + 4, sel_right - sel_left, height - 8, self.theme.surface_active)
+
         content: str = buf as str
-        commands.push_text(x + 8, y + (height - self.text_height()) / 2, content, self.theme.text)
-        # Caret (blink at ~30fps alternation)
+        commands.push_text(text_x, y + (height - self.text_height()) / 2, content, self.theme.text)
+
+        # Caret at its real pixel position, measured through the face rather
+        # than assumed from a fixed advance.
         if focused == 1:
             if (self.frame_counter / 30) & 1 == 0:
-                caret_x: i32 = x + 8 + current_len * self.text_advance()
+                caret_x: i32 = text_x + self.text_prefix_width(buf, self.text_caret)
                 commands.push_fill_rect(caret_x, y + 6, 1, height - 12, self.theme.text)
         self.push_commands(commands)
         return changed

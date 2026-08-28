@@ -15,6 +15,7 @@ load eqoi/layout
 load eqoi/app
 load eqoi/identity
 load eqoi/focus
+load eqoi/textedit
 load eqoi/widgets
 load eqoi/headless
 

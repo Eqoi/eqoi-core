@@ -9,7 +9,7 @@ On Linux the public API is display-server neutral. The shared `window` adapter
 uses native Wayland/xdg-shell when available and falls back to X11/XWayland;
 Eqoi does not contain display-server-specific rendering or input code.
 
-Current version: **0.11.0**
+Current version: **0.12.0**
 
 ```text
 Eqoi application
@@ -243,6 +243,31 @@ focus falls to the first focusable rather than vanishing.
 Space is deliberately not an activation key yet: it also arrives as a typed
 character, and until text input owns a caret there is no unambiguous way to
 tell a press from a typed space. Delete waits on the same work.
+
+## Text input
+
+`text_input` owns a caret and a selection rather than only appending at the
+end. Only one input can hold keyboard focus, so one set of caret state serves
+them all; the caller's contract is unchanged — still a byte buffer and a
+maximum length.
+
+- **Left/Right** move the caret, **Home/End** jump to either end, and
+  **Shift** with any of them extends the selection.
+- **Backspace** and **Delete** remove the selection when there is one, and
+  otherwise the character before or after the caret.
+- Typing inserts at the caret, replacing the selection.
+- **Ctrl+A** selects everything.
+- Clicking places the caret at the pointer, and dragging extends a selection.
+- The selection is drawn behind the text, and the caret sits at its measured
+  pixel position rather than at a fixed advance, so it stays correct under a
+  proportional face.
+
+Positions are byte offsets, which is correct for the ASCII the input layer
+delivers today. When the text package lands they become grapheme offsets, and
+no caller has to change, because none of them index the buffer themselves.
+
+Copy, cut and paste are not wired: they need an OS clipboard, which belongs in
+the `window` package. Nothing here pretends they work.
 
 ## Scrolling
 
