@@ -1,0 +1,108 @@
+import eqoi
+
+# Shadows and gradients.
+#
+# Both are easy to write and easy to get subtly wrong, and both fail quietly:
+# a shadow with a hard edge still looks like a shadow in a screenshot, and a
+# gradient that dips through its middle still looks like a gradient. So the
+# checks are about the shape of the falloff and the shape of the ramp rather
+# than about anything being merely present.
+
+fun luminance(color: UIColor) -> i32:
+    return ((color & 255) + ((color >> 8) & 255) + ((color >> 16) & 255)) / 3
+
+fun main() -> i32:
+    app: EqoiApp = EqoiApp.headless(300, 200)
+    if app.is_valid() == 0:
+        print("eqoi depth: headless app creation failed")
+        return 1
+    app.inject_mouse_move(290, 190)
+
+    # ---------------------------------------------------------------
+    # A shadow fades. Solid under the box, thinning outwards, gone past
+    # the blur -- and not a hard ring, which is what a falloff that
+    # forgot its gradient would draw.
+    # ---------------------------------------------------------------
+    if app.begin_offscreen() == 1:
+        app.shadow(100, 60, 100, 60, 10, 16, 0, ui_rgba(255, 255, 255, 255))
+        app.end()
+
+    under: i32 = luminance(app.pixel_at(150, 90))
+    near: i32 = luminance(app.pixel_at(150, 126))
+    far: i32 = luminance(app.pixel_at(150, 134))
+    beyond: i32 = luminance(app.pixel_at(150, 145))
+    ground: i32 = luminance(app.theme.background)
+
+    if under <= ground + 40:
+        print("eqoi depth: the shadow is not solid under its own box")
+        app.destroy()
+        return 2
+    if near <= far:
+        print("eqoi depth: the shadow does not thin with distance")
+        app.destroy()
+        return 3
+    if far <= beyond:
+        print("eqoi depth: the shadow does not keep thinning")
+        app.destroy()
+        return 4
+    if beyond > ground + 6:
+        print("eqoi depth: the shadow reaches past its blur")
+        app.destroy()
+        return 5
+
+    # Its corners are round. At the corner of the bounding box the rounded
+    # shape is three and a half pixels away and the shadow is already fading;
+    # at the middle of the same edge it is still solid. A shadow that squared
+    # its corners would have both the same.
+    corner: i32 = luminance(app.pixel_at(100, 60))
+    side: i32 = luminance(app.pixel_at(150, 60))
+    if corner >= side:
+        print("eqoi depth: the shadow squared off its corners")
+        app.destroy()
+        return 6
+
+    # ---------------------------------------------------------------
+    # A gradient runs monotonically from one end to the other, and does
+    # not dip in the middle -- which is what mixing sRGB codes does.
+    # ---------------------------------------------------------------
+    if app.begin_offscreen() == 1:
+        app.gradient(20, 20, 200, 40, 0, ui_rgb(0, 0, 0), ui_rgb(255, 255, 255), 0)
+        app.end()
+
+    previous: i32 = 0 - 1
+    x: i32 = 21
+    here: i32 = 0
+    while x < 219:
+        here = luminance(app.pixel_at(x, 40))
+        if here < previous:
+            print("eqoi depth: the ramp went backwards")
+            app.destroy()
+            return 7
+        previous = here
+        x = x + 1
+
+    # The midpoint of a black-to-white ramp mixed in light sits near 188,
+    # where sRGB puts half the light. Mixed in code it would sit at 128.
+    middle: i32 = luminance(app.pixel_at(120, 40))
+    if middle < 180 or middle > 196:
+        print("eqoi depth: the ramp was mixed in code rather than in light")
+        app.destroy()
+        return 8
+
+    # A rounded gradient keeps its corners: the very corner pixel is not
+    # painted, the middle of the same edge is.
+    if app.begin_offscreen() == 1:
+        app.gradient(20, 100, 120, 60, 14, ui_rgb(255, 255, 255), ui_rgb(255, 255, 255), 1)
+        app.end()
+    if luminance(app.pixel_at(20, 100)) > ground + 20:
+        print("eqoi depth: the rounded gradient filled its corner")
+        app.destroy()
+        return 9
+    if luminance(app.pixel_at(80, 100)) < 200:
+        print("eqoi depth: the rounded gradient did not fill its edge")
+        app.destroy()
+        return 10
+
+    app.destroy()
+    print("eqoi depth: ok")
+    return 0

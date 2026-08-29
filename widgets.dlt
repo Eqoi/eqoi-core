@@ -55,6 +55,28 @@ attach EqoiApp:
         commands.push_outline_rect(x, y, width, height, color, self.theme.border_width)
         self.push_commands(commands)
 
+    # A soft shadow under a rectangle. Drawn before the thing it falls from,
+    # since it is behind it: an immediate-mode frame has no z order beyond the
+    # order the calls come in.
+    fun shadow(self, x: i32, y: i32, width: i32, height: i32, radius: i32, blur: i32, spread: i32, color: UIColor):
+        commands: UIDrawList = self.commands
+        commands.push_shadow(x, y, width, height, radius, blur, spread, color)
+        self.push_commands(commands)
+
+    # Two colours down or across a rounded rectangle, mixed in light.
+    fun gradient(self, x: i32, y: i32, width: i32, height: i32, radius: i32, from_color: UIColor, to_color: UIColor, vertical: i32):
+        commands: UIDrawList = self.commands
+        commands.push_gradient(x, y, width, height, radius, from_color, to_color, vertical)
+        self.push_commands(commands)
+
+    # The shadow a raised surface casts: offset a little downwards, because
+    # light in an interface comes from above and a shadow centred under its
+    # own box reads as a glow instead.
+    fun elevation(self, x: i32, y: i32, width: i32, height: i32, radius: i32, level: i32):
+        if level <= 0:
+            return
+        self.shadow(x, y + level, width, height, radius, level * 3, 0, ui_rgba(0, 0, 0, 90))
+
     fun separator(self, x: i32, y: i32, width: i32):
         commands: UIDrawList = self.commands
         commands.push_line(x, y, x + width, y, self.theme.border, 1)
