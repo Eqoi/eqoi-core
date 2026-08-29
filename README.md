@@ -596,6 +596,51 @@ X11/XWayland is the runtime fallback. Both paths use cached software surfaces,
 native keyboard/pointer/text events, and are covered by forced-backend WSLg
 integration smoke tests in addition to cross-compilation.
 
+## Icons
+
+Icons are drawn, not loaded. `app.icon_glyph(kind, x, y, size, color)` puts one
+of twenty glyphs into a square box — arrows, reload, home, lock, download,
+menu, plus, close, star, user, grid, shield, chevron, search, the window
+controls, sidebar and globe.
+
+An icon font or a folder of PNGs would each have been less work once and more
+work forever: something to ship, something to decode, a licence to honour, and
+a bitmap that softens the moment the display scale is not 100%. A glyph laid
+out on a 24-grid and re-drawn at the size asked for is sharp everywhere and
+takes whatever colour it is given, which is what lets one set serve a light
+theme and a dark one.
+
+## Application shell
+
+The furniture an application wears rather than the controls it contains.
+
+```dolet
+app.doc_tabs_begin(x, y, width, height, count, active)
+result: i32 = app.doc_tab("A title", ui_rgb(230, 33, 23))   # 1 picked, 2 closed
+opened: i32 = app.doc_tabs_end()                            # the + button
+```
+
+Closable tabs that shrink as they multiply, each with a favicon slot and a
+title that clips with an ellipsis. The count is given up front because the
+width of one tab depends on how many there are, and an immediate-mode frame
+does not know what is coming — the same bargain the table makes for its rows.
+
+- `icon_button(x, y, size, kind)` — a hit area, an icon, and a hover
+  background that appears rather than sits there, or a toolbar of ten becomes
+  ten boxes.
+- `window_button(x, y, w, h, kind, danger)` — minimise, maximise, close, with
+  the close one turning red because that is the one the hand must not reach by
+  accident.
+- `omnibox(x, y, w, h, buf, max_len, leading_icon)` — an address bar: the same
+  text field underneath, wearing a pill and carrying an icon. One that could
+  not select, or could not hold Arabic, would be a different widget pretending.
+- `text_clipped(x, y, width, value, color)` — text that may not fit, clipped
+  rather than cut. Building a shortened copy would allocate every frame, and
+  cutting UTF-8 by bytes is how mojibake is made.
+
+`app.quit()` stops the frame loop, which a window drawing its own close button
+needs; the one the OS draws arrives as an event instead.
+
 ## Seeing it
 
 `examples/gallery.dlt` is the one to run first. Five tabs — controls, layout,
@@ -616,6 +661,20 @@ right at a glance.
 ```powershell
 doletc examples/images.dlt -o examples/eqoi-images.exe --target windows/x86_64 --no-console
 ```
+
+`examples/browser.dlt` is a browser's furniture and nothing behind it: a tab
+strip along the top, a toolbar along the bottom, and a page area left
+deliberately empty. It is the shell that says whether a framework can dress an
+application.
+
+```powershell
+doletc examples/browser.dlt -o examples/eqoi-browser.exe --target windows/x86_64 --no-console
+```
+
+Its window is still the one the OS draws. Merging the tab strip into the title
+bar needs a borderless *windowed* mode, a caption hit-test so dragging blank
+strip moves the window, and resize borders drawn by the application — all of
+which live in the `window` package, not here.
 
 `examples/arabic.dlt` needs a face with Arabic glyphs, loaded through
 `app.use_font`; the built-in face covers ASCII only.

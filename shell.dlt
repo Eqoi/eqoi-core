@@ -1,0 +1,240 @@
+# ============================
+#  Eqoi Application Shell
+# ============================
+# The furniture an application wears rather than the controls it contains: a
+# strip of closable document tabs, toolbar buttons that are an icon and a hit
+# area and nothing else, and a field shaped like an address bar.
+#
+# These are here because a browser, an editor and a terminal all want the same
+# three things and none of them are widgets in the ordinary sense — a tab knows
+# it can be closed, a toolbar button has no label to measure, and an address
+# bar is a text field with a different silhouette.
+
+attach EqoiApp:
+    # ---------------------------------------------------------------
+    # Text that may not fit
+    # ---------------------------------------------------------------
+    # Clipped rather than cut. Building a shortened copy would allocate on
+    # every frame for a string that rarely changes, and cutting UTF-8 by bytes
+    # is how mojibake is made: the boundary is not where the arithmetic
+    # suggests. The ellipsis is drawn after the clip is lifted, so it always
+    # lands whole.
+    fun text_clipped(self, x: i32, y: i32, width: i32, value: str, color: UIColor):
+        if width <= 0:
+            return
+        if self.text_width(value) <= width:
+            self.text(x, y, value, color)
+            return
+        dots: i32 = self.text_width("...")
+        room: i32 = width - dots
+        if room > 0:
+            self.push_clip(x, y - 2, room, self.text_height() + 4)
+            self.text(x, y, value, color)
+            self.pop_clip()
+        self.text(x + room, y, "...", color)
+
+    # ---------------------------------------------------------------
+    # Toolbar button
+    # ---------------------------------------------------------------
+    # Square, no label, and the hover background is the only thing that says
+    # it is a button at all — so it has to appear on hover rather than sit
+    # there permanently, or a toolbar of ten becomes ten boxes.
+    fun icon_button(self, x: i32, y: i32, size: i32, kind: i32) -> i32:
+        return self.icon_button_tinted(x, y, size, kind, self.theme.muted_text)
+
+    fun icon_button_tinted(self, x: i32, y: i32, size: i32, kind: i32, color: UIColor) -> i32:
+        id: i64 = self.mix_id(self.widget_id(130, x, y), kind as i64)
+        focused: i32 = self.register_focusable(id)
+        mouse: UIMouseState = self.input_state.mouse
+        hovered: i32 = mouse.is_over_xy(x, y, size, size)
+        glow: i32 = self.anim_hover(id, hovered)
+
+        if glow > 0:
+            commands: UIDrawList = self.commands
+            commands.push_fill_rounded_rect(x, y, size, size, size / 4, self.mix_colors(self.theme.surface, self.theme.surface_hover, glow))
+            self.push_commands(commands)
+
+        tint: UIColor = color
+        if hovered == 1:
+            tint = self.theme.text
+        inset: i32 = size / 5
+        self.icon_glyph(kind, x + inset, y + inset, size - inset * 2, tint)
+
+        if focused == 1:
+            self.focus_ring_rounded(x, y, size, size, size / 4)
+        if hovered == 1:
+            self.set_hover(id)
+        if hovered == 1 and mouse.left_pressed() == 1:
+            self.focus_by_pointer(id)
+            return 1
+        if self.is_activated(id) == 1:
+            return 1
+        return 0
+
+    # A window control: wider than tall, square corners, and the close button
+    # goes red rather than grey because that is the one the hand must not
+    # reach by accident.
+    fun window_button(self, x: i32, y: i32, width: i32, height: i32, kind: i32, danger: i32) -> i32:
+        id: i64 = self.mix_id(self.widget_id(131, x, y), kind as i64)
+        mouse: UIMouseState = self.input_state.mouse
+        hovered: i32 = mouse.is_over_xy(x, y, width, height)
+        glow: i32 = self.anim_hover(id, hovered)
+
+        tint: UIColor = self.theme.muted_text
+        if glow > 0:
+            fill: UIColor = self.mix_colors(self.theme.surface, self.theme.surface_hover, glow)
+            if danger == 1:
+                fill = self.mix_colors(self.theme.surface, self.theme.danger, glow)
+            commands: UIDrawList = self.commands
+            commands.push_fill_rect(x, y, width, height, fill)
+            self.push_commands(commands)
+        if hovered == 1:
+            tint = self.theme.text
+
+        size: i32 = height / 2
+        self.icon_glyph(kind, x + (width - size) / 2, y + (height - size) / 2, size, tint)
+
+        if hovered == 1:
+            self.set_hover(id)
+        if hovered == 1 and mouse.left_pressed() == 1:
+            return 1
+        return 0
+
+    # ---------------------------------------------------------------
+    # Document tabs
+    # ---------------------------------------------------------------
+    # The count is given up front because the width of one tab depends on how
+    # many there are, and an immediate-mode frame does not know what is coming.
+    # This is the same bargain the table makes for its row count.
+    fun doc_tabs_begin(self, x: i32, y: i32, width: i32, height: i32, count: i32, active_ptr: i64):
+        self.dt_x = x
+        self.dt_y = y
+        self.dt_w = width
+        self.dt_h = height
+        self.dt_count = count
+        self.dt_index = 0
+        self.dt_active_ptr = active_ptr
+        self.dt_new = 0
+
+        # Leave room for the new-tab button, then share what is left. Tabs
+        # shrink as they multiply, down to a floor: past that they would carry
+        # no title at all and a strip of blank stubs is worse than a strip
+        # that scrolls out of view.
+        room: i32 = width - height - 4
+        wanted: i32 = 240
+        if count > 0 and room / count < wanted:
+            wanted = room / count
+        if wanted < 56:
+            wanted = 56
+        self.dt_tab_w = wanted
+        self.push_clip(x, y, width, height)
+
+    # Returns 1 when this tab was picked this frame and 2 when its close
+    # button was. The caller knows which index it is on, so neither result
+    # needs to carry one.
+    fun doc_tab(self, title: str, favicon: UIColor) -> i32:
+        index: i32 = self.dt_index
+        self.dt_index = index + 1
+        x: i32 = self.dt_x + index * self.dt_tab_w
+        y: i32 = self.dt_y
+        w: i32 = self.dt_tab_w - 2
+        h: i32 = self.dt_h
+
+        id: i64 = self.mix_id(self.widget_id(132, self.dt_x, y), index as i64)
+        mouse: UIMouseState = self.input_state.mouse
+        hovered: i32 = mouse.is_over_xy(x, y, w, h)
+        active: i32 = 0
+        if self.dt_active_ptr != 0 and Memory.read_i32(self.dt_active_ptr) == index:
+            active = 1
+
+        radius: i32 = self.theme.corner_radius + 2
+        commands: UIDrawList = self.commands
+        if active == 1:
+            # Rounded at the top and square at the bottom, so the tab joins
+            # what is under it instead of floating above it. One rounded rect
+            # and one plain rect over its lower half is the whole trick.
+            commands.push_fill_rounded_rect(x, y + 3, w, h - 3, radius, self.theme.surface)
+            commands.push_fill_rect(x, y + h - radius, w, radius, self.theme.surface)
+        else:
+            glow: i32 = self.anim_hover(id, hovered)
+            if glow > 0:
+                commands.push_fill_rounded_rect(x, y + 4, w, h - 6, radius, self.mix_colors(self.theme.background, self.theme.surface_hover, glow))
+        self.push_commands(commands)
+
+        # Favicon, title, close: each only if there is room, in that order of
+        # importance. A tab too narrow for a title still says which site it is.
+        pad: i32 = 8
+        icon_size: i32 = 12
+        text_y: i32 = y + (h - self.text_height()) / 2
+        commands = self.commands
+        if w >= 34:
+            commands.push_fill_rounded_rect(x + pad, y + (h - icon_size) / 2, icon_size, icon_size, 3, favicon)
+        self.push_commands(commands)
+
+        close_size: i32 = 15
+        close_x: i32 = x + w - pad - close_size
+        show_close: i32 = 0
+        if w >= 92:
+            if active == 1 or hovered == 1:
+                show_close = 1
+
+        title_x: i32 = x + pad + icon_size + 6
+        title_room: i32 = close_x - title_x - 4
+        if show_close == 0:
+            title_room = x + w - pad - title_x
+        if w >= 34 and title_room > 12:
+            color: UIColor = self.theme.muted_text
+            if active == 1:
+                color = self.theme.text
+            self.text_clipped(title_x, text_y, title_room, title, color)
+
+        closed: i32 = 0
+        if show_close == 1:
+            self.push_id_int(index)
+            if self.icon_button(close_x, y + (h - close_size) / 2, close_size, EQOI_ICON_CLOSE) == 1:
+                closed = 1
+            self.pop_id()
+
+        if hovered == 1:
+            self.set_hover(id)
+        if closed == 1:
+            return 2
+        if hovered == 1 and mouse.left_pressed() == 1:
+            self.focus_by_pointer(id)
+            if self.dt_active_ptr != 0:
+                Memory.write_i32(self.dt_active_ptr, index)
+            return 1
+        return 0
+
+    # Draws the new-tab button after the last tab. Returns 1 if it was pressed.
+    fun doc_tabs_end(self) -> i32:
+        x: i32 = self.dt_x + self.dt_index * self.dt_tab_w + 4
+        size: i32 = self.dt_h - 10
+        pressed: i32 = 0
+        if x + size <= self.dt_x + self.dt_w:
+            self.push_id_str("newtab")
+            pressed = self.icon_button(x, self.dt_y + 5, size, EQOI_ICON_PLUS)
+            self.pop_id()
+        self.pop_clip()
+        return pressed
+
+    # ---------------------------------------------------------------
+    # Address bar
+    # ---------------------------------------------------------------
+    # A text field with a pill silhouette and something in front of the text.
+    # It is the same field underneath: an address bar that could not select,
+    # or could not hold Arabic, would be a different widget pretending.
+    fun omnibox(self, x: i32, y: i32, width: i32, height: i32, buf: i64, max_len: i32, leading: i32) -> i32:
+        icon_size: i32 = height - 14
+        inset: i32 = 12 + icon_size + 8
+        self.field_radius = height / 2
+        self.field_text_inset = inset
+        changed: i32 = self.text_input(x, y, width, height, buf, max_len)
+        self.field_radius = 0 - 1
+        self.field_text_inset = 0 - 1
+
+        tint: UIColor = self.theme.muted_text
+        if leading == EQOI_ICON_LOCK:
+            tint = self.theme.accent
+        self.icon_glyph(leading, x + 12, y + (height - icon_size) / 2, icon_size, tint)
+        return changed

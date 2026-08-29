@@ -27,6 +27,8 @@ load eqoi/widgets
 load eqoi/controls
 load eqoi/state
 load eqoi/images
+load eqoi/icons
+load eqoi/shell
 load eqoi/headless
 
 export EqoiTheme

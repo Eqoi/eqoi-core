@@ -1,0 +1,148 @@
+# ============================
+#  Eqoi Icons
+# ============================
+# Icons drawn from primitives rather than loaded from a file.
+#
+# A toolbar needs a back arrow before it needs anything else, and the built-in
+# face covers ASCII, so the choice is an icon font, a folder of PNGs, or lines
+# and triangles. Lines and triangles win on every count that matters here:
+# nothing to ship, nothing to decode, no licence to honour, and an icon that is
+# sharp at any size and any display scale because it is re-drawn rather than
+# re-sampled. It also takes the colour it is given, which is what lets one set
+# serve a light theme and a dark one.
+#
+# Every icon is laid out on a 24 by 24 grid and scaled to the box it is asked
+# for, so a caller reads coordinates that match the reference drawing.
+
+EQOI_ICON_NONE:          i32 = 0
+EQOI_ICON_ARROW_LEFT:    i32 = 1
+EQOI_ICON_ARROW_RIGHT:   i32 = 2
+EQOI_ICON_RELOAD:        i32 = 3
+EQOI_ICON_HOME:          i32 = 4
+EQOI_ICON_LOCK:          i32 = 5
+EQOI_ICON_DOWNLOAD:      i32 = 6
+EQOI_ICON_MENU:          i32 = 7
+EQOI_ICON_PLUS:          i32 = 8
+EQOI_ICON_CLOSE:         i32 = 9
+EQOI_ICON_STAR:          i32 = 10
+EQOI_ICON_USER:          i32 = 11
+EQOI_ICON_GRID:          i32 = 12
+EQOI_ICON_SHIELD:        i32 = 13
+EQOI_ICON_CHEVRON_DOWN:  i32 = 14
+EQOI_ICON_SEARCH:        i32 = 15
+EQOI_ICON_MINIMIZE:      i32 = 16
+EQOI_ICON_MAXIMIZE:      i32 = 17
+EQOI_ICON_SIDEBAR:       i32 = 18
+EQOI_ICON_GLOBE:         i32 = 19
+
+attach EqoiApp:
+    # A coordinate on the 24-grid, in the box's own pixels.
+    fun _icon_u(self, size: i32, value: i32) -> i32:
+        return (size * value) / 24
+
+    # Stroke weight. Kept at least one pixel so an icon does not vanish when
+    # a toolbar is compact or the display scale is fractional.
+    fun _icon_stroke(self, size: i32) -> i32:
+        weight: i32 = (size * 2) / 24
+        if weight < 1:
+            weight = 1
+        return weight
+
+    # Draw one icon into a square box. The box is the touch target; the
+    # drawing sits inside it on the 24-grid.
+    fun icon_glyph(self, kind: i32, x: i32, y: i32, size: i32, color: UIColor):
+        if kind == EQOI_ICON_NONE or size <= 0:
+            return
+        commands: UIDrawList = self.commands
+        t: i32 = self._icon_stroke(size)
+
+        if kind == EQOI_ICON_ARROW_LEFT:
+            commands.push_line(x + self._icon_u(size, 20), y + self._icon_u(size, 12), x + self._icon_u(size, 8), y + self._icon_u(size, 12), color, t)
+            commands.push_fill_triangle(x + self._icon_u(size, 5), y + self._icon_u(size, 12), x + self._icon_u(size, 12), y + self._icon_u(size, 6), x + self._icon_u(size, 12), y + self._icon_u(size, 18), color)
+        elif kind == EQOI_ICON_ARROW_RIGHT:
+            commands.push_line(x + self._icon_u(size, 4), y + self._icon_u(size, 12), x + self._icon_u(size, 16), y + self._icon_u(size, 12), color, t)
+            commands.push_fill_triangle(x + self._icon_u(size, 19), y + self._icon_u(size, 12), x + self._icon_u(size, 12), y + self._icon_u(size, 6), x + self._icon_u(size, 12), y + self._icon_u(size, 18), color)
+        elif kind == EQOI_ICON_RELOAD:
+            # Open at the top right, with the head carrying on round rather
+            # than pointing at the gap, which is what makes it read as turning.
+            commands.push_arc(x + self._icon_u(size, 12), y + self._icon_u(size, 12), self._icon_u(size, 7), 300, 210, color, t)
+            commands.push_fill_triangle(x + self._icon_u(size, 19), y + self._icon_u(size, 4), x + self._icon_u(size, 19), y + self._icon_u(size, 12), x + self._icon_u(size, 12), y + self._icon_u(size, 8), color)
+        elif kind == EQOI_ICON_HOME:
+            commands.push_fill_triangle(x + self._icon_u(size, 12), y + self._icon_u(size, 4), x + self._icon_u(size, 3), y + self._icon_u(size, 12), x + self._icon_u(size, 21), y + self._icon_u(size, 12), color)
+            commands.push_fill_rect(x + self._icon_u(size, 6), y + self._icon_u(size, 12), self._icon_u(size, 12), self._icon_u(size, 8), color)
+        elif kind == EQOI_ICON_LOCK:
+            commands.push_arc(x + self._icon_u(size, 12), y + self._icon_u(size, 11), self._icon_u(size, 4), 180, 360, color, t)
+            commands.push_fill_rounded_rect(x + self._icon_u(size, 6), y + self._icon_u(size, 11), self._icon_u(size, 12), self._icon_u(size, 9), self._icon_u(size, 2), color)
+        elif kind == EQOI_ICON_DOWNLOAD:
+            commands.push_line(x + self._icon_u(size, 12), y + self._icon_u(size, 3), x + self._icon_u(size, 12), y + self._icon_u(size, 11), color, t)
+            commands.push_fill_triangle(x + self._icon_u(size, 12), y + self._icon_u(size, 17), x + self._icon_u(size, 6), y + self._icon_u(size, 10), x + self._icon_u(size, 18), y + self._icon_u(size, 10), color)
+            commands.push_line(x + self._icon_u(size, 4), y + self._icon_u(size, 20), x + self._icon_u(size, 20), y + self._icon_u(size, 20), color, t)
+        elif kind == EQOI_ICON_MENU:
+            commands.push_line(x + self._icon_u(size, 4), y + self._icon_u(size, 7), x + self._icon_u(size, 20), y + self._icon_u(size, 7), color, t)
+            commands.push_line(x + self._icon_u(size, 4), y + self._icon_u(size, 12), x + self._icon_u(size, 20), y + self._icon_u(size, 12), color, t)
+            commands.push_line(x + self._icon_u(size, 4), y + self._icon_u(size, 17), x + self._icon_u(size, 20), y + self._icon_u(size, 17), color, t)
+        elif kind == EQOI_ICON_PLUS:
+            commands.push_line(x + self._icon_u(size, 12), y + self._icon_u(size, 5), x + self._icon_u(size, 12), y + self._icon_u(size, 19), color, t)
+            commands.push_line(x + self._icon_u(size, 5), y + self._icon_u(size, 12), x + self._icon_u(size, 19), y + self._icon_u(size, 12), color, t)
+        elif kind == EQOI_ICON_CLOSE:
+            commands.push_line(x + self._icon_u(size, 6), y + self._icon_u(size, 6), x + self._icon_u(size, 18), y + self._icon_u(size, 18), color, t)
+            commands.push_line(x + self._icon_u(size, 18), y + self._icon_u(size, 6), x + self._icon_u(size, 6), y + self._icon_u(size, 18), color, t)
+        elif kind == EQOI_ICON_STAR:
+            self._icon_star(commands, x, y, size, color)
+        elif kind == EQOI_ICON_USER:
+            commands.push_fill_circle(x + self._icon_u(size, 12), y + self._icon_u(size, 9), self._icon_u(size, 4), color)
+            commands.push_arc(x + self._icon_u(size, 12), y + self._icon_u(size, 22), self._icon_u(size, 7), 180, 360, color, t + 1)
+        elif kind == EQOI_ICON_GRID:
+            commands.push_fill_rounded_rect(x + self._icon_u(size, 4), y + self._icon_u(size, 4), self._icon_u(size, 7), self._icon_u(size, 7), 1, color)
+            commands.push_fill_rounded_rect(x + self._icon_u(size, 13), y + self._icon_u(size, 4), self._icon_u(size, 7), self._icon_u(size, 7), 1, color)
+            commands.push_fill_rounded_rect(x + self._icon_u(size, 4), y + self._icon_u(size, 13), self._icon_u(size, 7), self._icon_u(size, 7), 1, color)
+            commands.push_fill_rounded_rect(x + self._icon_u(size, 13), y + self._icon_u(size, 13), self._icon_u(size, 7), self._icon_u(size, 7), 1, color)
+        elif kind == EQOI_ICON_SHIELD:
+            commands.push_fill_rect(x + self._icon_u(size, 6), y + self._icon_u(size, 4), self._icon_u(size, 12), self._icon_u(size, 9), color)
+            commands.push_fill_triangle(x + self._icon_u(size, 6), y + self._icon_u(size, 13), x + self._icon_u(size, 18), y + self._icon_u(size, 13), x + self._icon_u(size, 12), y + self._icon_u(size, 21), color)
+        elif kind == EQOI_ICON_CHEVRON_DOWN:
+            commands.push_line(x + self._icon_u(size, 6), y + self._icon_u(size, 10), x + self._icon_u(size, 12), y + self._icon_u(size, 15), color, t)
+            commands.push_line(x + self._icon_u(size, 12), y + self._icon_u(size, 15), x + self._icon_u(size, 18), y + self._icon_u(size, 10), color, t)
+        elif kind == EQOI_ICON_SEARCH:
+            commands.push_outline_circle(x + self._icon_u(size, 10), y + self._icon_u(size, 10), self._icon_u(size, 6), color, t)
+            commands.push_line(x + self._icon_u(size, 15), y + self._icon_u(size, 15), x + self._icon_u(size, 20), y + self._icon_u(size, 20), color, t)
+        elif kind == EQOI_ICON_MINIMIZE:
+            commands.push_line(x + self._icon_u(size, 6), y + self._icon_u(size, 12), x + self._icon_u(size, 18), y + self._icon_u(size, 12), color, t)
+        elif kind == EQOI_ICON_MAXIMIZE:
+            commands.push_outline_rect(x + self._icon_u(size, 6), y + self._icon_u(size, 6), self._icon_u(size, 12), self._icon_u(size, 12), color, t)
+        elif kind == EQOI_ICON_SIDEBAR:
+            commands.push_outline_rounded_rect(x + self._icon_u(size, 4), y + self._icon_u(size, 5), self._icon_u(size, 16), self._icon_u(size, 14), self._icon_u(size, 2), color, t)
+            commands.push_fill_rect(x + self._icon_u(size, 4), y + self._icon_u(size, 5), self._icon_u(size, 6), self._icon_u(size, 14), color)
+        elif kind == EQOI_ICON_GLOBE:
+            commands.push_outline_circle(x + self._icon_u(size, 12), y + self._icon_u(size, 12), self._icon_u(size, 8), color, t)
+            commands.push_line(x + self._icon_u(size, 4), y + self._icon_u(size, 12), x + self._icon_u(size, 20), y + self._icon_u(size, 12), color, t)
+            commands.push_outline_circle(x + self._icon_u(size, 12), y + self._icon_u(size, 12), self._icon_u(size, 4), color, t)
+
+        self.push_commands(commands)
+
+    # Ten triangles fanned from the middle. A star has no straight run long
+    # enough to fake with lines, and a fan is the shape's own definition.
+    fun _icon_star(self, commands: UIDrawList, x: i32, y: i32, size: i32, color: UIColor):
+        cx: i32 = x + self._icon_u(size, 12)
+        cy: i32 = y + self._icon_u(size, 12)
+        outer: i32 = self._icon_u(size, 10)
+        inner: i32 = self._icon_u(size, 4)
+        point: i32 = 0
+        radius_a: i32 = 0
+        radius_b: i32 = 0
+        angle_a: i32 = 0
+        angle_b: i32 = 0
+        while point < 10:
+            angle_a = 0 - 90 + point * 36
+            angle_b = 0 - 90 + (point + 1) * 36
+            radius_a = outer
+            radius_b = inner
+            if (point & 1) == 1:
+                radius_a = inner
+                radius_b = outer
+            commands.push_fill_triangle(
+                cx, cy,
+                cx + (radius_a * draw_cos_q10(angle_a)) / 1024, cy + (radius_a * draw_sin_q10(angle_a)) / 1024,
+                cx + (radius_b * draw_cos_q10(angle_b)) / 1024, cy + (radius_b * draw_sin_q10(angle_b)) / 1024,
+                color)
+            point = point + 1

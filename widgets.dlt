@@ -400,9 +400,12 @@ attach EqoiApp:
         # The mapping from stored text to drawn glyphs. Everything that has to
         # know where a character ended up on screen reads it.
         self.text_map_build(buf, max_len)
-        text_x: i32 = x + 8
+        pad: i32 = 8
+        if self.field_text_inset >= 0:
+            pad = self.field_text_inset
+        text_x: i32 = x + pad
         if self.is_rtl() == 1:
-            text_x = x + width - 8 - self.text_map_width()
+            text_x = x + width - pad - self.text_map_width()
 
         if focused == 1:
             self.text_claim(id, length)
@@ -425,7 +428,7 @@ attach EqoiApp:
                 # anything is drawn from it.
                 self.text_map_build(buf, max_len)
                 if self.is_rtl() == 1:
-                    text_x = x + width - 8 - self.text_map_width()
+                    text_x = x + width - pad - self.text_map_width()
         elif self.text_owner == id:
             # Focus moved on; release the caret so the next input starts clean.
             self.text_owner = 0
@@ -439,6 +442,8 @@ attach EqoiApp:
         elif hovered == 1:
             border_color = self.theme.surface_hover
         r: i32 = self.theme.corner_radius
+        if self.field_radius >= 0:
+            r = self.field_radius
         if r > height / 2:
             r = height / 2
         commands.push_fill_rounded_rect(x, y, width, height, r, self.theme.surface)

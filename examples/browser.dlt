@@ -1,0 +1,181 @@
+import eqoi
+
+# A browser's furniture, and nothing behind it.
+#
+# The tab strip along the top and the toolbar along the bottom are the whole
+# of this example: the page area is left empty on purpose, because rendering a
+# page is a different project and the shell is the part that says whether a
+# framework can dress an application at all.
+#
+# Every icon here is drawn from lines, arcs and triangles at the size it is
+# asked for. Nothing is loaded, so this runs from a bare checkout and stays
+# sharp at any display scale.
+
+STRIP_H:  i32 = 40
+BOTTOM_H: i32 = 46
+CONTROL_W: i32 = 46
+MAX_TABS: i32 = 14
+
+fun browser_theme() -> EqoiTheme:
+    theme: EqoiTheme = EqoiTheme.dark()
+    theme.background     = ui_rgb(23, 23, 26)
+    theme.surface        = ui_rgb(42, 42, 48)
+    theme.surface_hover  = ui_rgb(58, 58, 65)
+    theme.surface_active = ui_rgb(70, 70, 78)
+    theme.text           = ui_rgb(233, 236, 239)
+    theme.muted_text     = ui_rgb(150, 156, 165)
+    theme.accent         = ui_rgb(232, 122, 65)
+    theme.accent_hover   = ui_rgb(243, 145, 92)
+    theme.border         = ui_rgb(58, 58, 66)
+    theme.corner_radius  = 8
+    return theme
+
+fun demo_title(slot: i32) -> str:
+    if slot == 0:
+        return "I Built the Next-Gen IONIC PLASMA THRUSTER"
+    elif slot == 1:
+        return "HTML Tutorial"
+    elif slot == 2:
+        return "Basic Electronics"
+    elif slot == 3:
+        return "How ELECTRICITY works"
+    elif slot == 4:
+        return "Transistors Explained"
+    elif slot == 5:
+        return "Making a Super IONIC Thruster"
+    elif slot == 6:
+        return "Blade Runner 2049 [Full Score]"
+    elif slot == 7:
+        return "Easy DIY Thermal Test"
+    elif slot == 8:
+        return "Delay Off Timer"
+    elif slot == 9:
+        return "ALL OF PHYSICS explained"
+    return "New Tab"
+
+fun demo_favicon(slot: i32) -> UIColor:
+    if slot == 1:
+        return ui_rgb(228, 77, 38)
+    elif slot == 3 or slot == 5:
+        return ui_rgb(60, 140, 230)
+    elif slot == 6:
+        return ui_rgb(120, 110, 200)
+    elif slot >= 10:
+        return ui_rgb(110, 116, 125)
+    return ui_rgb(230, 33, 23)
+
+fun main() -> i32:
+    app: EqoiApp = EqoiApp.create("Eqoi Browser Shell", 1500, 780)
+    if app.is_valid() == 0:
+        return 1
+    app.set_theme(browser_theme())
+
+    # The tabs are an array of slots rather than a count, so closing the
+    # middle one keeps the others' titles instead of shuffling them.
+    slots: i64 = Memory.malloc_zeroed((MAX_TABS as i64) * 4)
+    if slots == 0:
+        app.destroy()
+        return 2
+    count: i32 = 10
+    i: i32 = 0
+    while i < count:
+        Memory.write_i32(slots + (i as i64) * 4, i)
+        i = i + 1
+    next_slot: i32 = 10
+
+    active: i64 = app.alloc_int(0)
+    url: EqoiText = app.new_text(220)
+    url.set("https://www.youtube.com/watch?v=zomVPu6qWOY")
+
+    while app.running() == 1:
+        if app.begin() == 1:
+            width: i32 = app.width
+            height: i32 = app.height
+
+            # ---------------- the strip along the top ----------------
+            app.rect(0, 0, width, STRIP_H, app.theme.background)
+
+            controls_w: i32 = CONTROL_W * 3
+            app.doc_tabs_begin(6, 0, width - controls_w - 10, STRIP_H, count, active)
+            closed: i32 = 0 - 1
+            i = 0
+            while i < count:
+                slot: i32 = Memory.read_i32(slots + (i as i64) * 4)
+                if app.doc_tab(demo_title(slot), demo_favicon(slot)) == 2:
+                    closed = i
+                i = i + 1
+            opened: i32 = app.doc_tabs_end()
+
+            # Window controls, sharing the strip with the tabs.
+            wx: i32 = width - controls_w
+            app.window_button(wx, 0, CONTROL_W, STRIP_H, EQOI_ICON_MINIMIZE, 0)
+            app.window_button(wx + CONTROL_W, 0, CONTROL_W, STRIP_H, EQOI_ICON_MAXIMIZE, 0)
+            if app.window_button(wx + CONTROL_W * 2, 0, CONTROL_W, STRIP_H, EQOI_ICON_CLOSE, 1) == 1:
+                app.quit()
+
+            # ---------------- the page, deliberately empty ----------------
+            page_h: i32 = height - STRIP_H - BOTTOM_H
+            app.rect(0, STRIP_H, width, page_h, app.theme.surface)
+            hint: str = "The page goes here."
+            app.muted_label((width - app.text_width(hint)) / 2, STRIP_H + page_h / 2 - 20, hint)
+            note: str = "Everything around it is Eqoi, and every icon is drawn rather than loaded."
+            app.muted_label((width - app.text_width(note)) / 2, STRIP_H + page_h / 2 + 4, note)
+
+            # ---------------- the bar along the bottom ----------------
+            bar_y: i32 = height - BOTTOM_H
+            app.rect(0, bar_y, width, BOTTOM_H, app.theme.background)
+
+            size: i32 = 30
+            iy: i32 = bar_y + (BOTTOM_H - size) / 2
+            x: i32 = 8
+            app.icon_button(x, iy, size, EQOI_ICON_ARROW_LEFT)
+            x = x + size + 2
+            app.icon_button(x, iy, size, EQOI_ICON_ARROW_RIGHT)
+            x = x + size + 2
+            app.icon_button(x, iy, size, EQOI_ICON_RELOAD)
+            x = x + size + 2
+            app.icon_button(x, iy, size, EQOI_ICON_HOME)
+            x = x + size + 10
+
+            right: i32 = width - 8
+            trailing: i32 = (size + 2) * 5
+            field_h: i32 = 32
+            app.omnibox(x, bar_y + (BOTTOM_H - field_h) / 2, right - trailing - x - 8, field_h, url.ptr, 219, EQOI_ICON_LOCK)
+
+            tx: i32 = right - trailing
+            app.icon_button(tx, iy, size, EQOI_ICON_SHIELD)
+            tx = tx + size + 2
+            app.icon_button(tx, iy, size, EQOI_ICON_STAR)
+            tx = tx + size + 2
+            app.icon_button(tx, iy, size, EQOI_ICON_DOWNLOAD)
+            tx = tx + size + 2
+            app.icon_button(tx, iy, size, EQOI_ICON_USER)
+            tx = tx + size + 2
+            app.icon_button(tx, iy, size, EQOI_ICON_MENU)
+
+            app.end()
+
+            # ---------------- what the strip asked for ----------------
+            # Applied after the frame so the list the tabs were drawn from
+            # does not change underneath them mid-frame.
+            if closed >= 0 and count > 1:
+                i = closed
+                while i < count - 1:
+                    Memory.write_i32(slots + (i as i64) * 4, Memory.read_i32(slots + ((i + 1) as i64) * 4))
+                    i = i + 1
+                count = count - 1
+                current: i32 = app.get_int(active)
+                if current >= count:
+                    current = count - 1
+                elif current > closed:
+                    current = current - 1
+                app.set_int(active, current)
+            if opened == 1 and count < MAX_TABS:
+                Memory.write_i32(slots + (count as i64) * 4, next_slot)
+                next_slot = next_slot + 1
+                count = count + 1
+                app.set_int(active, count - 1)
+
+    Memory.free(slots)
+    app.destroy()
+    return 0
