@@ -671,6 +671,14 @@ application.
 doletc examples/browser.dlt -o examples/eqoi-browser.exe --target windows/x86_64 --no-console
 ```
 
+Its text is Inter, loaded once from the examples' own assets at the pixel
+height the display scale calls for — about 80 ms at startup, and nothing per
+frame, because Eqoi borrows the cached atlas rather than rasterising glyphs
+while drawing. Chrome is mostly labels packed into small widths, and a
+proportional face fits about half again as many characters into a tab as the
+built-in fixed one does. If the file is missing it says so on the page and
+carries on with the built-in face.
+
 Its window is still the one the OS draws. Merging the tab strip into the title
 bar needs a borderless *windowed* mode, a caption hit-test so dragging blank
 strip moves the window, and resize borders drawn by the application — all of

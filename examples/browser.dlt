@@ -8,13 +8,16 @@ import eqoi
 # framework can dress an application at all.
 #
 # Every icon here is drawn from lines, arcs and triangles at the size it is
-# asked for. Nothing is loaded, so this runs from a bare checkout and stays
-# sharp at any display scale.
+# asked for, so the furniture stays sharp at any display scale. The text is
+# Inter, loaded once from the examples' own assets: chrome is mostly labels
+# packed into small widths, and a proportional face fits about half again as
+# many characters into a tab as a fixed one does.
 
 STRIP_H:  i32 = 40
 BOTTOM_H: i32 = 46
 CONTROL_W: i32 = 46
 MAX_TABS: i32 = 14
+FONT_PATH: str = "assets/fonts/Inter-Regular.ttf"
 
 fun browser_theme() -> EqoiTheme:
     theme: EqoiTheme = EqoiTheme.dark()
@@ -70,6 +73,16 @@ fun main() -> i32:
         return 1
     app.set_theme(browser_theme())
 
+    # Take the display's scale before building the face, then ask for the
+    # pixel height that a 15-unit text comes to there. Loading at 15 flat
+    # would give a crisp face at 100% and a blurry one everywhere else, which
+    # is the one thing on screen that would not have scaled.
+    app.adopt_display_scale()
+    face: FontFace = font_face_load_ttf(FONT_PATH, app.font_pixels(15))
+    loaded: i32 = face.is_valid()
+    if loaded == 1:
+        app.use_font(face)
+
     # The tabs are an array of slots rather than a count, so closing the
     # middle one keeps the others' titles instead of shuffling them.
     slots: i64 = Memory.malloc_zeroed((MAX_TABS as i64) * 4)
@@ -120,6 +133,9 @@ fun main() -> i32:
             app.muted_label((width - app.text_width(hint)) / 2, STRIP_H + page_h / 2 - 20, hint)
             note: str = "Everything around it is Eqoi, and every icon is drawn rather than loaded."
             app.muted_label((width - app.text_width(note)) / 2, STRIP_H + page_h / 2 + 4, note)
+            if loaded == 0:
+                missing: str = "Inter was not found beside the program; this is the built-in face."
+                app.muted_label((width - app.text_width(missing)) / 2, STRIP_H + page_h / 2 + 28, missing)
 
             # ---------------- the bar along the bottom ----------------
             bar_y: i32 = height - BOTTOM_H
@@ -178,4 +194,6 @@ fun main() -> i32:
 
     Memory.free(slots)
     app.destroy()
+    if loaded == 1:
+        face.destroy()
     return 0
