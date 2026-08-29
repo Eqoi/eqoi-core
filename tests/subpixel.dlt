@@ -1,0 +1,139 @@
+import eqoi
+import fonts
+
+# Subpixel positioning and kerning.
+#
+# The claim under test is that the pen keeps a fraction of a pixel and that
+# whatever measures text agrees with whatever draws it. Those two go together:
+# a measure that rounds per glyph and a pen that does not will disagree by a
+# pixel per character, and every centred label and every caret inherits the
+# difference.
+#
+# Needs a real TrueType face, so it looks where the examples keep theirs and
+# says plainly when it cannot find one rather than passing on nothing.
+
+fun load_face(size: i32) -> FontFace:
+    # Beside the tests first, since that is where this program is run from.
+    face: FontFace = font_face_load_ttf("../examples/assets/fonts/Inter-Regular.ttf", size)
+    if face.is_valid() == 1:
+        return face
+    return font_face_load_ttf("assets/fonts/Inter-Regular.ttf", size)
+
+# The rightmost column with any ink in it.
+fun ink_right(app: EqoiApp, limit_x: i32, limit_y: i32) -> i32:
+    right: i32 = 0 - 1
+    y: i32 = 0
+    x: i32 = 0
+    while y < limit_y:
+        x = 0
+        while x < limit_x:
+            if app.pixel_at(x, y) != app.theme.background:
+                if x > right:
+                    right = x
+            x = x + 1
+        y = y + 1
+    return right
+
+fun main() -> i32:
+    face: FontFace = load_face(20)
+    if face.is_valid() == 0:
+        print("eqoi subpixel: ok (skipped; no Inter beside this program)")
+        return 0
+
+    # ---------------------------------------------------------------
+    # The atlas carries phases and a pair table.
+    # ---------------------------------------------------------------
+    if face.phases < 2:
+        print("eqoi subpixel: the face was rasterised at one phase only")
+        face.destroy()
+        return 2
+    if face.kern_count <= 0:
+        print("eqoi subpixel: no kerning was read from GPOS")
+        face.destroy()
+        return 3
+
+    # A and V kern tight, and T before a round letter tighter still. Both are
+    # negative in every text face that has kerning at all; a positive value
+    # would mean the value record was read at the wrong offset.
+    a_v: i32 = face.kern_q8(face.glyph_id_at(face.glyph_index(65)), face.glyph_id_at(face.glyph_index(86)))
+    if a_v >= 0:
+        print("eqoi subpixel: A followed by V did not kern in")
+        face.destroy()
+        return 4
+    if a_v < 0 - 2560:
+        print("eqoi subpixel: the A V kern is implausibly large, so the units are wrong")
+        face.destroy()
+        return 5
+
+    # ---------------------------------------------------------------
+    # Kerning has to reach the measurement, not just the table.
+    # ---------------------------------------------------------------
+    kerned: i32 = face.measure_q8("AV")
+    apart: i32 = face.advance_q8_at(face.glyph_index(65)) + face.advance_q8_at(face.glyph_index(86))
+    if kerned != apart + a_v:
+        print("eqoi subpixel: measuring did not apply the kern")
+        face.destroy()
+        return 6
+
+    # ---------------------------------------------------------------
+    # The fraction is really kept: a string of many narrow glyphs is not a
+    # whole multiple of any single rounded advance.
+    # ---------------------------------------------------------------
+    one: i32 = face.advance_q8_at(face.glyph_index(105))
+    if (one % 256) == 0:
+        print("eqoi subpixel: this face has no fractional advance to test with")
+        face.destroy()
+        return 0
+    ten: i32 = face.measure_q8("iiiiiiiiii")
+    if ten != one * 10:
+        print("eqoi subpixel: a repeated glyph did not sum exactly")
+        face.destroy()
+        return 7
+    rounded_each: i32 = ((one + 128) / 256) * 10
+    if ((ten + 128) / 256) == rounded_each:
+        print("eqoi subpixel: rounding per glyph gave the same answer, so nothing was proved")
+        face.destroy()
+        return 8
+
+    # ---------------------------------------------------------------
+    # And the drawn line ends where the measure says it does.
+    # ---------------------------------------------------------------
+    app: EqoiApp = EqoiApp.headless(600, 80)
+    if app.is_valid() == 0:
+        print("eqoi subpixel: headless app creation failed")
+        face.destroy()
+        return 9
+    app.use_font(face)
+    app.inject_mouse_move(590, 70)
+
+    sample: str = "Wave AVATAR To the Village"
+    measured: i32 = app.text_width(sample)
+    if app.begin_offscreen() == 1:
+        app.text(20, 20, sample, app.theme.text)
+        app.end()
+    drawn: i32 = ink_right(app, 600, 80)
+    if drawn < 0:
+        print("eqoi subpixel: nothing was drawn")
+        app.destroy()
+        face.destroy()
+        return 10
+
+    # The last glyph's ink stops a little short of its advance -- that gap is
+    # the side bearing, and it is small. What must not happen is the two
+    # drifting apart by a pixel per character.
+    gap: i32 = (20 + measured) - drawn
+    if gap < 0:
+        print("eqoi subpixel: the drawn line ran past its measured width")
+        app.destroy()
+        face.destroy()
+        return 11
+    if gap > 4:
+        print("eqoi subpixel: drawing and measuring disagree by more than a side bearing")
+        app.destroy()
+        face.destroy()
+        return 12
+
+    app.destroy()
+    face.destroy()
+    print("eqoi subpixel: ok")
+    return 0
