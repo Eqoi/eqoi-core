@@ -1,0 +1,125 @@
+import eqoi
+import fonts
+
+# Gamma-correct glyph blending.
+#
+# The defect it fixes is asymmetry. Coverage blended onto sRGB bytes does
+# arithmetic on a perceptual code rather than on light, and the error does not
+# cancel between the two polarities: at half coverage, white on black lands at
+# code 128, which carries about a fifth of white's light, while black on white
+# lands at the same code and so removes four fifths of it. The same glyph
+# reads thin one way round and heavy the other.
+#
+# So the test renders one glyph shape both ways and weighs the ink. Blended in
+# light the two must come out equal, because coverage enters the mix linearly
+# and the size of the deviation from the background does not care which
+# direction it runs in.
+
+
+fun load_face(size: i32) -> FontFace:
+    face: FontFace = font_face_load_ttf("../examples/assets/fonts/Inter-Regular.ttf", size)
+    if face.is_valid() == 1:
+        return face
+    return font_face_load_ttf("assets/fonts/Inter-Regular.ttf", size)
+
+# How far the frame's light strays from its background, summed. The absolute
+# value is what matters: one direction adds light and the other removes it.
+fun deviation(app: EqoiApp, width: i32, height: i32, background: i32) -> i64:
+    total: i64 = 0
+    ground: i32 = ui_light_of(background)
+    y: i32 = 0
+    x: i32 = 0
+    pixel: UIColor = 0
+    here: i32 = 0
+    while y < height:
+        x = 0
+        while x < width:
+            pixel = app.pixel_at(x, y)
+            here = ui_light_of(pixel & 255)
+            if here > ground:
+                total = total + ((here - ground) as i64)
+            else:
+                total = total + ((ground - here) as i64)
+            x = x + 1
+        y = y + 1
+    return total
+
+fun main() -> i32:
+    # ---------------------------------------------------------------
+    # The tables themselves, before anything is drawn with them.
+    # ---------------------------------------------------------------
+    if ui_gamma_ready() == 0:
+        print("eqoi gamma: the tables would not build")
+        return 1
+    if ui_light_of(0) != 0:
+        print("eqoi gamma: black is not zero light")
+        return 2
+    if ui_light_of(255) < 65000:
+        print("eqoi gamma: white is not full light")
+        return 3
+    # sRGB 128 carries about 21.6% of white's light, not 50%.
+    middle: i32 = ui_light_of(128)
+    if middle < 13800 or middle > 14500:
+        print("eqoi gamma: the transfer curve is not sRGB")
+        return 4
+    # And half the light codes to about 188, which is the whole point.
+    half: i32 = ui_code_of(32768)
+    if half < 186 or half > 190:
+        print("eqoi gamma: half the light did not code back to where sRGB puts it")
+        return 5
+    # Round tripping must not drift.
+    probe: i32 = 0
+    while probe < 256:
+        if ui_code_of(ui_light_of(probe)) != probe:
+            print("eqoi gamma: a value did not survive the round trip")
+            return 6
+        probe = probe + 1
+
+    # ---------------------------------------------------------------
+    # The same glyph, both polarities, weighed.
+    # ---------------------------------------------------------------
+    face: FontFace = load_face(28)
+    app: EqoiApp = EqoiApp.headless(320, 60)
+    if app.is_valid() == 0:
+        print("eqoi gamma: headless app creation failed")
+        return 7
+    if face.is_valid() == 1:
+        app.use_font(face)
+    app.inject_mouse_move(310, 55)
+
+    sample: str = "Hamburgefonstiv"
+    if app.begin_offscreen() == 1:
+        app.rect(0, 0, 320, 60, ui_rgb(0, 0, 0))
+        app.text(10, 16, sample, ui_rgb(255, 255, 255))
+        app.end()
+    on_dark: i64 = deviation(app, 320, 60, 0)
+
+    if app.begin_offscreen() == 1:
+        app.rect(0, 0, 320, 60, ui_rgb(255, 255, 255))
+        app.text(10, 16, sample, ui_rgb(0, 0, 0))
+        app.end()
+    on_light: i64 = deviation(app, 320, 60, 255)
+
+    if on_dark <= 0 or on_light <= 0:
+        print("eqoi gamma: one of the two frames has no ink in it")
+        app.destroy()
+        return 8
+
+    # Equal to within a percent. Blending in code instead of light puts these
+    # a long way apart -- the whole reason the tables exist.
+    spread: i64 = on_dark - on_light
+    if spread < 0:
+        spread = 0 - spread
+    larger: i64 = on_dark
+    if on_light > larger:
+        larger = on_light
+    if spread * 100 > larger:
+        print("eqoi gamma: the two polarities do not carry the same ink")
+        app.destroy()
+        return 9
+
+    app.destroy()
+    if face.is_valid() == 1:
+        face.destroy()
+    print("eqoi gamma: ok")
+    return 0
