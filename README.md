@@ -641,6 +641,22 @@ does not know what is coming — the same bargain the table makes for its rows.
 `app.quit()` stops the frame loop, which a window drawing its own close button
 needs; the one the OS draws arrives as an event instead.
 
+## Depth
+
+```dolet
+app.shadow(x, y, width, height, radius, blur, spread, color)
+app.gradient(x, y, width, height, radius, from_color, to_color, vertical)
+app.elevation(x, y, width, height, radius, level)
+```
+
+`elevation` offsets its shadow downwards, because light in an interface comes
+from above and a shadow centred under its own box reads as a glow.
+
+Both stand on one signed distance to a rounded rectangle: a shadow whose
+corners did not match the box it falls from is worse than no shadow. The
+gradient interpolates in light, so a black-to-white ramp has no dip through
+its middle.
+
 ## Seeing it
 
 `examples/gallery.dlt` is the one to run first. Five tabs — controls, layout,

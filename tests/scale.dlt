@@ -185,5 +185,72 @@ fun main() -> i32:
         return 22
     b.destroy()
 
+    # ---------------------------------------------------------------
+    # Two boxes laid out touching must still touch after scaling.
+    #
+    # This is the one that a scale layer gets wrong quietly. Rounding a
+    # position and a size independently leaves a hairline of background
+    # between one pair and a pixel of overlap between the next, and the
+    # result is a layout that looks very slightly untidy everywhere without
+    # anything being identifiably wrong. Deriving each size from the gap
+    # between two scaled edges makes the shared boundary exact.
+    # ---------------------------------------------------------------
+    c: EqoiApp = EqoiApp.headless(200, 60)
+    if c.is_valid() == 0:
+        print("eqoi scale: the tiling app would not start")
+        return 23
+    c.set_scale_percent(125)
+    c.inject_mouse_move(190, 55)
+    left_color: UIColor = ui_rgb(255, 0, 0)
+    right_color: UIColor = ui_rgb(0, 255, 0)
+    if c.begin_offscreen() == 1:
+        c.rect(10, 5, 15, 20, left_color)
+        c.rect(25, 5, 15, 20, right_color)
+        c.end()
+
+    # Walk the whole span the two cover and require every column to belong
+    # to one of them. A gap shows up as the background between them.
+    first: i32 = 0 - 1
+    last: i32 = 0 - 1
+    gaps: i32 = 0
+    seen_left: i32 = 0
+    seen_right: i32 = 0
+    x: i32 = 0
+    here: UIColor = 0
+    while x < 200:
+        here = c.pixel_at(x, 15)
+        if here == left_color:
+            seen_left = 1
+        if here == right_color:
+            seen_right = 1
+        if here == left_color or here == right_color:
+            if first < 0:
+                first = x
+            if last >= 0 and x > last + 1:
+                gaps = gaps + 1
+            last = x
+        x = x + 1
+
+    if seen_left == 0 or seen_right == 0:
+        print("eqoi scale: one of the two boxes was not drawn")
+        c.destroy()
+        return 24
+    if gaps != 0:
+        print("eqoi scale: a gap opened between two boxes laid out touching")
+        c.destroy()
+        return 25
+
+    # And the seam is where the arithmetic says: the right box starts at the
+    # scaled position of its own left edge, with nothing left over.
+    if c.pixel_at(c.to_physical(25), 15) != right_color:
+        print("eqoi scale: the second box does not start on its own edge")
+        c.destroy()
+        return 26
+    if c.pixel_at(c.to_physical(25) - 1, 15) != left_color:
+        print("eqoi scale: the first box does not run up to the seam")
+        c.destroy()
+        return 27
+    c.destroy()
+
     print("eqoi scale: ok")
     return 0

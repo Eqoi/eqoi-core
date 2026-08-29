@@ -21,12 +21,12 @@ FONT_PATH: str = "assets/fonts/Inter-Regular.ttf"
 
 fun browser_theme() -> EqoiTheme:
     theme: EqoiTheme = EqoiTheme.dark()
-    theme.background     = ui_rgb(23, 23, 26)
+    theme.background     = ui_rgb(10, 10, 10)
     theme.surface        = ui_rgb(42, 42, 48)
     theme.surface_hover  = ui_rgb(58, 58, 65)
     theme.surface_active = ui_rgb(70, 70, 78)
-    theme.text           = ui_rgb(233, 236, 239)
-    theme.muted_text     = ui_rgb(150, 156, 165)
+    theme.text           = ui_rgb(225, 225, 225)
+    theme.muted_text     = ui_rgb(225, 225, 225)
     theme.accent         = ui_rgb(232, 122, 65)
     theme.accent_hover   = ui_rgb(243, 145, 92)
     theme.border         = ui_rgb(58, 58, 66)
@@ -129,6 +129,11 @@ fun main() -> i32:
             # ---------------- the page, deliberately empty ----------------
             page_h: i32 = height - STRIP_H - BOTTOM_H
             app.rect(0, STRIP_H, width, page_h, app.theme.surface)
+            # The page sits above the chrome, so it casts upwards into the
+            # strip and downwards into the bar. Two pixels of gradient does
+            # what a border cannot: it separates without drawing a line.
+            app.gradient(0, STRIP_H, width, 3, 0, ui_rgba(0, 0, 0, 70), ui_rgba(0, 0, 0, 0), 1)
+            app.gradient(0, height - BOTTOM_H - 3, width, 3, 0, ui_rgba(0, 0, 0, 0), ui_rgba(0, 0, 0, 70), 1)
             hint: str = "The page goes here."
             app.muted_label((width - app.text_width(hint)) / 2, STRIP_H + page_h / 2 - 20, hint)
             note: str = "Everything around it is Eqoi, and every icon is drawn rather than loaded."
@@ -139,7 +144,7 @@ fun main() -> i32:
 
             # ---------------- the bar along the bottom ----------------
             bar_y: i32 = height - BOTTOM_H
-            app.rect(0, bar_y, width, BOTTOM_H, app.theme.background)
+            app.gradient(0, bar_y, width, BOTTOM_H, 0, app.theme.background, ui_rgb(17, 17, 20), 1)
 
             size: i32 = 30
             iy: i32 = bar_y + (BOTTOM_H - size) / 2
@@ -156,7 +161,13 @@ fun main() -> i32:
             right: i32 = width - 8
             trailing: i32 = (size + 2) * 5
             field_h: i32 = 32
-            app.omnibox(x, bar_y + (BOTTOM_H - field_h) / 2, right - trailing - x - 8, field_h, url.ptr, 219, EQOI_ICON_LOCK)
+            field_x: i32 = x
+            field_y: i32 = bar_y + (BOTTOM_H - field_h) / 2
+            field_w: i32 = right - trailing - x - 8
+            # Raised a little off the bar, which is what an address bar is:
+            # the one thing on the toolbar you are meant to type into.
+            app.elevation(field_x, field_y, field_w, field_h, field_h / 2, 2)
+            app.omnibox(field_x, field_y, field_w, field_h, url.ptr, 219, EQOI_ICON_LOCK)
 
             tx: i32 = right - trailing
             app.icon_button(tx, iy, size, EQOI_ICON_SHIELD)
